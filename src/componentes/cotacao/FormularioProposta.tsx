@@ -34,7 +34,8 @@ const qtd = (v: string) => Number(v).toLocaleString("pt-BR", { maximumFractionDi
 function lerPreco(t: string | undefined): number | null {
   const s = (t ?? "").trim().replace(/\s/g, "");
   if (!s) return null;
-  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  const milhar = /^\d{1,3}(\.\d{3})+$/.test(s);
+  const n = Number(s.includes(",") || milhar ? s.replace(/\./g, "").replace(",", ".") : s);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 const VAZIO: DadosProposta = { responsavelNome: "", itens: {} };

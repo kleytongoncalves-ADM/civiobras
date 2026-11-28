@@ -11,7 +11,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!u) return new Response("Sessão encerrada.", { status: 401 });
   let p;
   try {
-    p = await painelSuprimentos(comoAtor(u), id);
+    p = await painelSuprimentos(comoAtor(u), id, true);
   } catch (e) {
     if (e instanceof ErroDeRegra || e instanceof SemPermissao) return new Response(e.message, { status: 404 });
     throw e;

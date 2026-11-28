@@ -15,7 +15,8 @@ export type Motivo = { nivel: Exclude<Nivel, "verde">; texto: string; href: stri
 export type ObraGerencial = {
   id: string; codigo: string; nome: string; tipo: TipoObra; forma: FormaExecucao; situacao: Situacao; unidade: string | null; unidadeId: string | null;
   latitude: number | null; longitude: number | null;
-  contratado: number; medido: number; pago: number; aPagar: number; executadoPct: number;
+  /** Valor atual dos contratos (com aditivos e reajustes), o mesmo da página Contratos. */
+  contratado: number; saldo: number; medido: number; pago: number; aPagar: number; executadoPct: number;
   previstoPct: number | null; realizadoPct: number | null; idp: number | null;
   ultimaMedicao: string | null; vigenciaFim: string | null; diasVigencia: number | null;
   ncsGraves: number; ncsVencidas: number; documentosVencidos: number; exigenciasFaltando: number; habilitacoesVencidas: number;
@@ -98,7 +99,9 @@ export async function painelGerencial(a: Ator, filtros: FiltrosGerencial = {}): 
 
     const obras: ObraGerencial[] = linhas.map((l) => {
       const ks = contratos.filter((k) => k.obraId === l.id && k.situacao !== "rascunho");
-      const contratado = ks.reduce((s, k) => s + n(k.valorContratual), 0);
+      const contratado = ks.reduce((s, k) => s + n(k.valorAtual), 0);
+      const comAditivos = ks.reduce((s, k) => s + n(k.valorContratual), 0);
+      const saldo = ks.reduce((s, k) => s + n(k.saldo), 0);
       const medido = ks.reduce((s, k) => s + n(k.medido), 0);
       const pago = ks.reduce((s, k) => s + n(k.pago), 0);
       const vigentes = ks.filter((k) => k.situacao === "vigente" && k.vigenciaFim);
@@ -111,7 +114,7 @@ export async function painelGerencial(a: Ator, filtros: FiltrosGerencial = {}): 
       // Medição parada só conta depois de 45 dias da ordem de serviço.
       const ultima = l.ultimaMedicao ?? (l.inicioContrato && l.inicioContrato <= h ? l.inicioContrato : null);
       const base = {
-        ...l, ultimaMedicao: ultima, contratado, medido, pago, aPagar: 0, executadoPct: contratado ? (medido / contratado) * 100 : 0,
+        ...l, ultimaMedicao: ultima, contratado, saldo, medido, pago, aPagar: 0, executadoPct: comAditivos ? (medido / comAditivos) * 100 : 0,
         previstoPct: tot ? (vp / tot) * 100 : null, realizadoPct: tot ? (va / tot) * 100 : null, idp: vp > 0 ? va / vp : null,
         vigenciaFim, diasVigencia: vigenciaFim ? dias(h, vigenciaFim) : null,
         documentosVencidos: d?.vencidos ?? 0, exigenciasFaltando: d?.pendentes ?? 0,
@@ -182,7 +185,7 @@ export async function painelGerencial(a: Ator, filtros: FiltrosGerencial = {}): 
     for (const o of obras) { porNivel[o.nivel]++; porSituacao[o.situacao] = (porSituacao[o.situacao] ?? 0) + 1; }
     const totais = obras.reduce((t, o) => ({ contratado: t.contratado + o.contratado, medido: t.medido + o.medido, pago: t.pago + o.pago, aPagar: t.aPagar + o.aPagar, saldo: 0 }),
       { contratado: 0, medido: 0, pago: 0, aPagar: 0, saldo: 0 });
-    totais.saldo = totais.contratado - totais.medido;
+    totais.saldo = obras.reduce((t, o) => t + o.saldo, 0);
     const ordem: Record<Nivel, number> = { vermelho: 0, amarelo: 1, verde: 2 };
     obras.sort((x, y) => ordem[x.nivel] - ordem[y.nivel] || y.motivos.length - x.motivos.length || x.codigo.localeCompare(y.codigo));
     return {

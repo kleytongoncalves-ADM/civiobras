@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra, type Contexto } from "../lib/db";
-import { ajustar, dec, lerNumeroBr, mul, soma, texto, ZERO, type Dec, type Regra } from "../lib/decimal";
+import { ajustar, dec, lerNumeroBr, lerValorBr, mul, soma, texto, ZERO, type Dec, type Regra } from "../lib/decimal";
 import {
   bdiPadrao, calcularBdi, calcularCronograma, calcularItem, conferirBdi, cprbDoAno, curvaAbc, custoUnitario,
   precoDasCotacoes, validarBdi, PARCELAS_BDI, TIPOS_OBRA_BDI, type AvisoBdi, type Bdi, type TipoObraBdi,
@@ -584,7 +584,7 @@ export async function adicionarCotacao(
 ) {
   if (!d.fornecedor.trim()) throw new ErroDeRegra("Informe o fornecedor.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.data)) throw new ErroDeRegra("Informe a data da cotação.");
-  const valor = lerNumeroBr(d.valor);
+  const valor = lerValorBr(d.valor);
   if (valor == null || valor <= 0n) throw new ErroDeRegra("Informe o valor da cotação.");
   if (d.validade && d.validade < d.data) throw new ErroDeRegra("A validade não pode ser antes da data da cotação.");
   await comContexto(ctx(a), async (c) => {

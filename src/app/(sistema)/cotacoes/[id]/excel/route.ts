@@ -63,7 +63,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       const prop = s.propostas.find((p) => p.conviteId === fo.conviteId);
       return {
         nome: fo.fornecedor, cnpj: conv ? formatarCnpj(conv.cnpj) : "",
-        precos: linhas!.map((l) => { const o = l.ofertas.find((x) => x.conviteId === fo.conviteId); return o && o.preco != null && !o.excluida ? Number(o.preco) : null; }),
+        precos: linhas!.map((l) => { const o = l.ofertas.find((x) => x.conviteId === fo.conviteId); return o && o.precoSemFrete != null && !o.excluida ? Number(o.precoSemFrete) : null; }),
         frete: s.freteIncluso || !prop ? null : Number(prop.frete) || 0,
       };
     }),
@@ -81,7 +81,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
   if (m && s.propostas.length) {
     await abaTabela(wb, doc, "Propostas", {
-      titulo: "Propostas recebidas", paisagem: true, nota: "Última versão de cada fornecedor recebida dentro do prazo.",
+      titulo: "Propostas recebidas", paisagem: true, nota: "Última versão de cada fornecedor recebida dentro do prazo, com os preços como foram enviados (sem o frete). O total do grupo já inclui o frete.",
       colunas: [{ titulo: "Fornecedor", largura: 34 }, { titulo: "Código", largura: 12 }, { titulo: "Material", largura: 50 }, { titulo: "Und.", largura: 7, alinhar: "center" },
         { titulo: "Quantidade", largura: 13, formato: "#,##0.0000" }, { titulo: "Preço unitário", largura: 15, formato: '"R$" #,##0.0000' }, { titulo: "Total", largura: 16, formato: FORMATO.moeda },
         { titulo: "Marca", largura: 20 }, { titulo: "Modelo", largura: 18 }, { titulo: "Situação", largura: 22 }, { titulo: "Observação", largura: 34 }],
@@ -90,7 +90,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           n((todos ?? m).fornecedores.find((f) => f.conviteId === p.conviteId)?.total), "", "", [dentro.has(p.conviteId) ? "" : "fora da comparação", p.prazoEntrega != null ? `entrega ${p.prazoEntrega} d` : "", p.pagamentoDias != null ? `pagamento ${p.pagamentoDias} d` : "", p.garantiaMeses != null ? `garantia ${p.garantiaMeses} m` : ""].filter(Boolean).join(" · "), p.observacao ?? ""] },
         ...(dentro.has(p.conviteId) ? m : todos ?? m).linhas.map((l): Linha => {
           const o = l.ofertas.find((x) => x.conviteId === p.conviteId);
-          return { valores: [p.fornecedor, l.material.semSinapi ? "" : l.material.codigo, l.material.descricao, unidade(l.material.unidade), n(l.material.quantidade), n(o?.preco), n(o?.total), o?.marca ?? "", o?.modelo ?? "",
+          return { valores: [p.fornecedor, l.material.semSinapi ? "" : l.material.codigo, l.material.descricao, unidade(l.material.unidade), n(l.material.quantidade), n(o?.precoSemFrete), o?.precoSemFrete == null ? null : Math.round(Number(l.material.quantidade) * Number(o.precoSemFrete) * 100) / 100, o?.marca ?? "", o?.modelo ?? "",
             !o || o.preco == null ? "Indisponível" : o.excluida === "nao_atende" ? "Não atende à especificação" : o.excluida ? "Desconsiderado" : !dentro.has(p.conviteId) ? "Fora da comparação" : o.menor ? "Menor preço do item" : "", o?.justificativa ?? o?.observacao ?? ""] };
         }),
       ]),

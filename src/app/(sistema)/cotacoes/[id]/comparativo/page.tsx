@@ -80,7 +80,7 @@ export default async function Comparativo({ params }: { params: Promise<{ id: st
               <td className="dir num">{l.material.precoReferencia == null ? "—" : valor(l.material.precoReferencia)}</td>
               {l.ofertas.map((o) => o.preco == null ? <td key={o.conviteId} className="cot-divisa cot-indisponivel dir">Indisponível</td> : (
                 <td key={o.conviteId} className={`dir cot-divisa ${o.menor ? "cot-menor" : ""}`} title={o.justificativa ?? undefined}>
-                  <span className={`num ${o.excluida ? "cot-riscado" : ""}`}><span className="cot-marca">{valor(o.preco)}</span></span>
+                  <span className={`num ${o.excluida ? "cot-riscado" : ""}`} title={o.precoSemFrete && o.precoSemFrete !== o.preco ? `Sem frete: R$ ${valor(o.precoSemFrete)}` : undefined}><span className="cot-marca">{valor(o.preco)}</span></span>
                   {o.difSinapi != null && <span className={`cot-dif ${o.classe}`}>{difPct(o.difSinapi)}</span>}
                   {o.discrepante && <span className="cot-alerta" title={o.discrepante === "baixo" ? "Muito abaixo dos demais preços" : "Muito acima dos demais preços"}>{o.discrepante === "baixo" ? "baixo" : "alto"}</span>}
                   <div className="fraco" style={{ fontWeight: 450 }}>{o.excluida ? (o.excluida === "nao_atende" ? "Não atende à especificação" : "Desconsiderado") : [o.marca, o.modelo].filter(Boolean).join(" · ")}</div>
@@ -95,7 +95,7 @@ export default async function Comparativo({ params }: { params: Promise<{ id: st
               {fs.map((f) => (
                 <td key={f.conviteId} className={`dir cot-divisa ${m.menorGlobal?.conviteId === f.conviteId ? "cot-menor" : ""}`}>
                   <span className="num">{valor(f.total)}</span>{f.difSinapi != null && <span className={`cot-dif ${f.classe}`}>{difPct(f.difSinapi)}</span>}
-                  <div className="fraco" style={{ fontWeight: 500 }}>{f.completa ? "Todos os itens" : `${f.itensCotados} de ${f.itens} itens`}</div>
+                  <div className="fraco" style={{ fontWeight: 500 }}>{f.completa ? "Todos os itens" : `${f.itensCotados} de ${f.itens} itens`}{Number(f.frete) > 0 ? ` · frete R$ ${valor(f.frete)}` : ""}</div>
                 </td>
               ))}
               <td className="dir num cot-divisa">{tot.media == null ? "—" : valor(tot.media)}</td><td className="dir num">{tot.mediana == null ? "—" : valor(tot.mediana)}</td>
@@ -109,7 +109,7 @@ export default async function Comparativo({ params }: { params: Promise<{ id: st
         </table>
       </div>
       <p className="fraco" style={{ fontSize: 12.5 }}>
-        Média e mediana usam só os preços informados; item indisponível não entra. A diferença percentual compara cada preço com a referência do orçamento. No total, a comparação usa a referência apenas dos itens que o fornecedor cotou.
+        Os preços já incluem o frete: quando o fornecedor cobra frete à parte, ele é rateado pelos itens cotados na proporção do valor de cada um. Média e mediana usam só os preços informados; item indisponível não entra. A diferença percentual compara cada preço com a referência do orçamento. No total, a comparação usa a referência apenas dos itens que o fornecedor cotou.
       </p>
       <section className="surgir">
         <h2 className="cartao-titulo" style={{ marginBottom: 10 }}>Apuração por item</h2>

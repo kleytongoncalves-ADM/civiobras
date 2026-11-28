@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra, type Contexto } from "../lib/db";
-import { ajustar, dec, div, lerNumeroBr, mul, paraNumero, texto, UM, ZERO, type Dec, type Regra } from "../lib/decimal";
+import { ajustar, dec, div, lerNumeroBr, lerValorBr, mul, paraNumero, texto, UM, ZERO, type Dec, type Regra } from "../lib/decimal";
 import { diaLocal } from "../lib/formato";
 import { rotuloContrato, type Regime, type SituacaoContrato } from "./contratos";
 import { planejadoAte, somarDias, type AtividadeCurva, type Calendario } from "./cpm";
@@ -218,7 +218,7 @@ async function aberta(c: PoolClient, a: Ator, id: string) {
 }
 
 export async function adicionarGlosa(a: Ator, id: string, d: { motivo: string; valor: string; itemServicoId?: string | null }) {
-  const valor = lerNumeroBr(d.valor);
+  const valor = lerValorBr(d.valor);
   if (valor == null || valor <= ZERO) throw new ErroDeRegra("Informe o valor da glosa.");
   if (!d.motivo.trim()) throw new ErroDeRegra("Informe o motivo da glosa.");
   await comContexto(ctx(a), async (c) => {
@@ -243,7 +243,7 @@ export async function removerGlosa(a: Ator, id: string, glosaId: string) {
 
 export async function adicionarRetencao(a: Ator, id: string, d: { tipo: TipoRetencao; base: string; aliquota: string; descricao?: string | null }) {
   if (!ROTULO_RETENCAO[d.tipo]) throw new ErroDeRegra("Escolha o tipo de retenção.");
-  const base = lerNumeroBr(d.base);
+  const base = lerValorBr(d.base);
   const aliquota = lerNumeroBr(d.aliquota);
   if (base == null || base <= ZERO) throw new ErroDeRegra("Informe a base de cálculo.");
   if (aliquota == null || aliquota <= ZERO || aliquota > dec(100)) throw new ErroDeRegra("Alíquota inválida.");
@@ -408,7 +408,7 @@ async function aprovadaParaPagar(c: PoolClient, a: Ator, id: string) {
 }
 
 export async function registrarNotaFiscal(a: Ator, id: string, d: { numero: string; data: string; valor: string }) {
-  const valor = lerNumeroBr(d.valor);
+  const valor = lerValorBr(d.valor);
   if (!d.numero.trim()) throw new ErroDeRegra("Informe o número da nota fiscal.");
   if (!dataValida(d.data)) throw new ErroDeRegra("Informe a data da nota fiscal.");
   if (valor == null || valor <= ZERO) throw new ErroDeRegra("Informe o valor da nota fiscal.");
@@ -428,7 +428,7 @@ export async function registrarNotaFiscal(a: Ator, id: string, d: { numero: stri
 }
 
 export async function registrarPagamento(a: Ator, id: string, d: { data: string; valor: string; empenho?: string | null; liquidacao?: string | null; ordemBancaria?: string | null }) {
-  const valor = lerNumeroBr(d.valor);
+  const valor = lerValorBr(d.valor);
   if (!dataValida(d.data)) throw new ErroDeRegra("Informe a data do pagamento.");
   if (d.data > hoje()) throw new ErroDeRegra("A data do pagamento não pode ser futura.");
   if (valor == null || valor <= ZERO) throw new ErroDeRegra("Informe o valor pago.");

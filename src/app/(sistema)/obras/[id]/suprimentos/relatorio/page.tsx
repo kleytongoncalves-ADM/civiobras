@@ -18,7 +18,7 @@ export default async function RelatorioSuprimentos({ params }: { params: Promise
   const u = await exigirUsuario();
   let p;
   try {
-    p = await painelSuprimentos(comoAtor(u), id);
+    p = await painelSuprimentos(comoAtor(u), id, true);
   } catch (e) {
     if (e instanceof ErroDeRegra || e instanceof SemPermissao) notFound();
     throw e;

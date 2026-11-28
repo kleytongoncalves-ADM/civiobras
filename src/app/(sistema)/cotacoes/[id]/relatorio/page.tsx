@@ -141,7 +141,7 @@ export default async function RelatorioDaCotacao({ params }: { params: Promise<{
         </Secao>
 
         {m.fornecedores.length > 0 && (
-          <Secao numero={++n} titulo="Mapa comparativo de preços" descricao="Preço unitário em R$: referência do orçamento, propostas lado a lado, média e mediana dos preços válidos de cada item. O menor preço está em negrito, com ▼. O percentual compara com a referência.">
+          <Secao numero={++n} titulo="Mapa comparativo de preços" descricao="Preço unitário em R$: referência do orçamento, propostas lado a lado, média e mediana dos preços válidos de cada item. O menor preço está em negrito, com ▼. O percentual compara com a referência. Quando o fornecedor cobra frete à parte, ele já está rateado nos preços.">
             {fatias(m.fornecedores, m.fornecedores.length <= 4 ? 4 : Math.ceil(m.fornecedores.length / Math.ceil(m.fornecedores.length / 4))).map((grupo, g) => (
               <div className="rel-rolagem" key={g} style={g ? { marginTop: 18 } : undefined}><table className="rel-tabela">
                 <thead><tr><th>Item</th><th>Material</th><th>Und.</th><th className="dir">Quant.</th><th className="dir">Referência</th>{grupo.map((f) => <th key={f.conviteId} className="dir" style={{ whiteSpace: "normal" }}>{f.fornecedor}</th>)}<th className="dir">Média</th><th className="dir">Mediana</th></tr></thead>

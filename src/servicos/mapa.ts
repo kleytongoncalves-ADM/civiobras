@@ -1,5 +1,5 @@
 import { comContexto, ErroDeRegra } from "../lib/db";
-import { ctxCampo, hoje, obraNoAcesso, obrasVisiveis, ROTULO_CLIMA, ROTULO_CONDICAO, uuid, type Clima, type Condicao } from "./campo";
+import { ctxCampo, diasSemAcidente, hoje, inicioDaObraSql, obraNoAcesso, obrasVisiveis, ROTULO_CLIMA, ROTULO_CONDICAO, uuid, type Clima, type Condicao } from "./campo";
 import { listarContratos } from "./contratos";
 import { painelGerencial, type Motivo, type Nivel } from "./gerencial";
 import type { Ator } from "./obras";
@@ -85,7 +85,6 @@ export type FichaObra = {
 };
 
 const somarDiasIso = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
-const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86400000);
 
 /** Tudo o que se sabe da obra, para a ficha do mapa. Cada parte só aparece para quem tem acesso ao módulo. */
 export async function fichaDaObra(a: Ator, obraId: string): Promise<FichaObra> {
@@ -139,11 +138,10 @@ export async function fichaDaObra(a: Ator, obraId: string): Promise<FichaObra> {
     if (pode(a, "seguranca.ver")) {
       const s = (await c.query(
         `select to_char(max(data) filter (where tipo in ('acidente_com_afastamento', 'acidente_sem_afastamento')), 'YYYY-MM-DD') as ultimo,
-                count(*) filter (where situacao <> 'encerrada')::int as abertas
+                count(*) filter (where situacao <> 'encerrada')::int as abertas,
+                (select ${inicioDaObraSql("o")} from obra o where o.id = $1) as inicio
            from ocorrencia_seguranca where obra_id = $1`, [obraId])).rows[0];
-      const inicio = o.ordemServicoData ?? null;
-      const desde = s.ultimo ?? inicio;
-      seguranca = { diasSemAcidente: desde && desde <= h ? diasEntre(desde, h) : null, ultimoAcidente: s.ultimo, abertas: s.abertas };
+      seguranca = { diasSemAcidente: diasSemAcidente(s.ultimo, s.inicio, h), ultimoAcidente: s.ultimo, abertas: s.abertas };
     }
     const fotos = pode(a, "diario.ver") || pode(a, "qualidade.ver") || pode(a, "seguranca.ver") ? (await c.query(
       `select id, legenda, coalesce(tirada_em, criado_em) as em, latitude::float8 as latitude, longitude::float8 as longitude

@@ -24,13 +24,15 @@ export type ItemProposta = { preco: string | null; marca: string | null; modelo:
 export type PropostaC = {
   conviteId: string; fornecedor: string; enviadaEm: string;
   prazoEntrega: number | null; pagamentoDias: number | null; garantiaMeses: number | null; historico: number | null;
+  /** Frete cobrado à parte (R$). Entra na comparação rateado pelos itens cotados. */
+  frete?: string | null;
   itens: Record<string, ItemProposta>;
 };
 export type AvaliacaoC = { conviteId: string; materialId: string; tipo: "nao_atende" | "desconsiderado"; justificativa: string };
 
 export type ClasseSinapi = "abaixo" | "igual" | "acima";
 export type Oferta = {
-  conviteId: string; preco: string | null; total: string | null; marca: string | null; modelo: string | null; observacao: string | null;
+  conviteId: string; preco: string | null; precoSemFrete: string | null; total: string | null; marca: string | null; modelo: string | null; observacao: string | null;
   indisponivel: boolean; excluida: AvaliacaoC["tipo"] | null; justificativa: string | null;
   difSinapi: number | null; classe: ClasseSinapi | null; discrepante: "baixo" | "alto" | null; menor: boolean;
 };
@@ -40,7 +42,7 @@ export type LinhaMapa = {
   validas: number; diferencaPropostas: number | null; economia: string | null; classe: ClasseSinapi | null;
 };
 export type TotalFornecedor = {
-  conviteId: string; fornecedor: string; total: string; itensCotados: number; itens: number; completa: boolean;
+  conviteId: string; fornecedor: string; total: string; frete: string; itensCotados: number; itens: number; completa: boolean;
   refCotados: string; difSinapi: number | null; classe: ClasseSinapi | null; itensVencidos: number; valorVencido: string;
 };
 export type Mapa = {
@@ -67,7 +69,24 @@ function antes(a: PropostaC, b: PropostaC) {
   return a.enviadaEm < b.enviadaEm ? -1 : a.enviadaEm > b.enviadaEm ? 1 : a.conviteId < b.conviteId ? -1 : 1;
 }
 
+/**
+ * Fração do frete sobre o valor dos itens cotados de cada proposta. O preço comparado de cada item
+ * é o preço com o frete rateado: preço × (1 + frete ÷ soma dos itens cotados).
+ */
+function fatoresDeFrete(materiais: MaterialC[], propostas: PropostaC[]) {
+  return new Map(propostas.map((p) => {
+    const frete = p.frete ? dec(p.frete) : ZERO;
+    if (frete <= ZERO) return [p.conviteId, { frete: ZERO, fator: ZERO }] as const;
+    const soma = materiais.reduce((t, m) => {
+      const i = p.itens[m.id];
+      return !i || i.indisponivel || i.preco == null ? t : t + mul(dec(m.quantidade), dec(i.preco));
+    }, ZERO);
+    return [p.conviteId, { frete, fator: soma > ZERO ? div(frete, soma) : ZERO }] as const;
+  }));
+}
+
 export function comparar(materiais: MaterialC[], propostas: PropostaC[], avaliacoes: AvaliacaoC[], regra: Regra, limites: Limites = LIMITES_PADRAO): Mapa {
+  const fretes = fatoresDeFrete(materiais, propostas);
   const excl = new Map(avaliacoes.map((a) => [`${a.conviteId}|${a.materialId}`, a]));
   const porConvite = new Map(propostas.map((p) => [p.conviteId, p]));
   const acum = new Map(propostas.map((p) => [p.conviteId, { total: ZERO, ref: ZERO, cotados: 0, vencidos: 0, valorVencido: ZERO }]));
@@ -84,11 +103,12 @@ export function comparar(materiais: MaterialC[], propostas: PropostaC[], avaliac
       const av = excl.get(`${p.conviteId}|${m.id}`) ?? null;
       const base = { conviteId: p.conviteId, marca: i?.marca ?? null, modelo: i?.modelo ?? null, observacao: i?.observacao ?? null,
         excluida: av?.tipo ?? null, justificativa: av?.justificativa ?? null, discrepante: null, menor: false } as const;
-      if (!i || i.indisponivel || i.preco == null) return { ...base, preco: null, total: null, indisponivel: true, difSinapi: null, classe: null };
-      const preco = dec(i.preco);
+      if (!i || i.indisponivel || i.preco == null) return { ...base, preco: null, precoSemFrete: null, total: null, indisponivel: true, difSinapi: null, classe: null };
+      const semFrete = dec(i.preco);
+      const preco = semFrete + mul(semFrete, fretes.get(p.conviteId)!.fator);
       if (!av) validos.push({ p, preco });
       const d = ref == null || m.semSinapi ? null : pct(preco, ref);
-      return { ...base, preco: texto(preco, 4), total: texto(ajustar(mul(qtd, preco), 2, regra)), indisponivel: false, difSinapi: d, classe: classificar(d, limites.tolerancia) };
+      return { ...base, preco: texto(preco, 4), precoSemFrete: texto(semFrete, 4), total: texto(ajustar(mul(qtd, preco), 2, regra)), indisponivel: false, difSinapi: d, classe: classificar(d, limites.tolerancia) };
     });
 
     const med = validos.length >= 3 ? mediana(validos.map((v) => v.preco)) : null;
@@ -129,7 +149,7 @@ export function comparar(materiais: MaterialC[], propostas: PropostaC[], avaliac
     const a = acum.get(p.conviteId)!;
     const d = a.cotados ? pct(a.total, a.ref) : null;
     return {
-      conviteId: p.conviteId, fornecedor: p.fornecedor, total: texto(a.total), itensCotados: a.cotados, itens: materiais.length,
+      conviteId: p.conviteId, fornecedor: p.fornecedor, total: texto(a.total), frete: texto(fretes.get(p.conviteId)!.frete), itensCotados: a.cotados, itens: materiais.length,
       completa: a.cotados === materiais.length && materiais.length > 0, refCotados: texto(a.ref), difSinapi: d, classe: classificar(d, limites.tolerancia),
       itensVencidos: a.vencidos, valorVencido: texto(a.valorVencido),
     };
