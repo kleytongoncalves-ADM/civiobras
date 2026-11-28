@@ -6,7 +6,7 @@
 import { createHash, createHmac } from "node:crypto";
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra, pool, type Contexto } from "../lib/db";
-import { dec, lerNumeroBr, texto, ZERO, type Regra } from "../lib/decimal";
+import { dec, lerValorBr, texto, ZERO, type Regra } from "../lib/decimal";
 import {
   apurar, comparar, compararAutomatico, PESOS_PADRAO, validarPesos, FATORES,
   type Apuracao, type AvaliacaoC, type Comparacao, type Criterio, type Mapa, type MaterialC, type Pesos, type PropostaC,
@@ -488,7 +488,7 @@ function conferirProposta(d: DadosProposta, materiais: { id: string; codigo: str
     const i = d.itens?.[m.id] ?? {};
     const rotulo = m.descricao.length > 50 ? `${m.descricao.slice(0, 50)}…` : m.descricao;
     if (i.indisponivel) return { materialId: m.id, preco: null, marca: null, modelo: null, observacao: limpo(i.observacao, 300), indisponivel: true };
-    const p = lerNumeroBr(i.preco ?? "");
+    const p = lerValorBr(i.preco ?? "");
     if (p == null || p <= ZERO) throw new ErroDeRegra(`Informe o preço de "${rotulo}" ou marque o item como indisponível.`);
     if (p >= dec("10000000000")) throw new ErroDeRegra(`Preço de "${rotulo}" fora do limite.`);
     const marca = limpo(i.marca, 80);
@@ -498,7 +498,7 @@ function conferirProposta(d: DadosProposta, materiais: { id: string; codigo: str
   if (!itens.some((i) => !i.indisponivel)) throw new ErroDeRegra("Informe o preço de ao menos um item.");
   const validade = lerInteiro(d.validadeDias, "Validade da proposta em dias", 1, 365);
   if (validadeMinima && (validade == null || validade < validadeMinima)) throw new ErroDeRegra(`A validade da proposta precisa ser de ao menos ${validadeMinima} dias.`);
-  const frete = d.frete?.trim() ? lerNumeroBr(d.frete) : ZERO;
+  const frete = d.frete?.trim() ? lerValorBr(d.frete) : ZERO;
   if (frete == null || frete < ZERO) throw new ErroDeRegra("Frete inválido.");
   return {
     nome, cargo: limpo(d.responsavelCargo, 80), telefone: limpo(d.responsavelTelefone, 40), itens, validade,

@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra, type Contexto } from "../lib/db";
-import { ajustar, dec, lerNumeroBr, mul, texto, UM, ZERO, type Dec, type Regra } from "../lib/decimal";
+import { ajustar, dec, lerNumeroBr, lerValorBr, mul, texto, UM, ZERO, type Dec, type Regra } from "../lib/decimal";
 import { diasEntre, somarDias } from "./cpm";
 import type { Ator } from "./obras";
 import { obterOrcamento, rotuloOrcamento } from "./orcamentos";
@@ -398,9 +398,10 @@ export function pendenciasDoContrato(k: Contrato, itens: number) {
   return p;
 }
 
-export async function assinarContrato(a: Ator, id: string) {
+/** Assina o contrato. O cronograma em elaboração, sem pendências, vira a linha de base no mesmo ato. */
+export async function assinarContrato(a: Ator, id: string): Promise<"gravada" | "pendente" | "sem_cronograma"> {
   exigir(a, "contrato.assinar");
-  await comContexto(ctx(a), async (c) => {
+  return comContexto(ctx(a), async (c) => {
     await c.query("select 1 from contrato where id = $1 for update", [id]);
     const k = await cabecalho(c, a, id);
     if (k.situacao !== "rascunho") throw new ErroDeRegra("Este contrato já foi assinado.");
@@ -417,6 +418,8 @@ export async function assinarContrato(a: Ator, id: string) {
       if (k.obraSituacao === "orcada") await c.query("select mudar_situacao_obra($1, 'licitada', $2)", [k.obraId, k.processo ? `Processo ${k.processo}` : doc]);
       if (k.obraSituacao === "orcada" || k.obraSituacao === "licitada") await c.query("select mudar_situacao_obra($1, 'contratada', $2)", [k.obraId, doc]);
     }
+    const { linhaBaseNaAssinatura } = await import("./cronogramas");
+    return linhaBaseNaAssinatura(c, a, id);
   });
 }
 
@@ -431,7 +434,7 @@ export async function designar(a: Ator, id: string, gestorId: string | null, fis
 export async function adicionarGarantia(a: Ator, id: string, d: { modalidade: Modalidade; valor: string; instituicao?: string | null; documento?: string | null; inicio: string; vencimento: string }) {
   exigir(a, "contrato.editar");
   if (!ROTULO_MODALIDADE[d.modalidade]) throw new ErroDeRegra("Escolha a modalidade.");
-  const valor = lerNumeroBr(d.valor);
+  const valor = lerValorBr(d.valor);
   if (valor == null || valor <= ZERO) throw new ErroDeRegra("Informe o valor da garantia.");
   if (!d.inicio || !d.vencimento || !dataValida(d.inicio) || !dataValida(d.vencimento)) throw new ErroDeRegra("Informe início e vencimento.");
   if (d.vencimento < d.inicio) throw new ErroDeRegra("O vencimento não pode ser anterior ao início.");

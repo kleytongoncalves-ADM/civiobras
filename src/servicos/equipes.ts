@@ -305,7 +305,8 @@ export async function custosDaObra(c: PoolClient, obraId: string): Promise<Linha
   });
 }
 
-export async function painelEquipes(a: Ator, obraId: string): Promise<PainelEquipes> {
+/** completo: sem limite de linhas, para planilha e relatório. A tela mostra os apontamentos mais recentes. */
+export async function painelEquipes(a: Ator, obraId: string, completo = false): Promise<PainelEquipes> {
   exigirVer(a, "equipes.ver");
   return comContexto(ctxCampo(a), async (c) => {
     const obra = await obraNoAcesso(c, a, obraId);
@@ -347,12 +348,12 @@ export async function painelEquipes(a: Ator, obraId: string): Promise<PainelEqui
               z.horas_normais::float8 as normais, z.horas_extras::float8 as extras,
               (coalesce(z.custo_hora, 0) * (z.horas_normais + z.horas_extras * ${ADICIONAL_EXTRA}))::float8 as custo
          from apontamento z join pessoa p on p.id = z.pessoa_id left join item_servico i on i.id = z.item_servico_id
-        where z.obra_id = $1 order by z.data desc, p.nome limit 120`, [obraId])).rows;
+        where z.obra_id = $1 order by z.data desc, p.nome${completo ? "" : " limit 120"}`, [obraId])).rows;
     const apontamentosEq = (await c.query(
       `select to_char(z.data, 'YYYY-MM-DD') as data, q.descricao, case when i.id is not null then i.numero || ' ' || left(i.descricao, 50) end as item,
               z.horas::float8 as horas, (coalesce(z.custo_hora, 0) * z.horas)::float8 as custo
          from apontamento_equipamento z join equipamento q on q.id = z.equipamento_id left join item_servico i on i.id = z.item_servico_id
-        where z.obra_id = $1 order by z.data desc, q.descricao limit 60`, [obraId])).rows;
+        where z.obra_id = $1 order by z.data desc, q.descricao${completo ? "" : " limit 60"}`, [obraId])).rows;
     const custos = await custosDaObra(c, obraId);
     const ativas = pessoas.filter((p) => p.ativa);
     return {

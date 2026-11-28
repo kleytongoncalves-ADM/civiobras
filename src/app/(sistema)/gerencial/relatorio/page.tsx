@@ -86,7 +86,7 @@ export default async function RelatorioGerencial({ searchParams }: { searchParam
               <tbody>{comContrato.map((o) => (
                 <tr key={o.id}><td><b className="num">{o.codigo}</b> {o.nome}</td>
                   <td className="dir num">{moeda(o.contratado)}</td><td className="dir num">{moeda(o.medido)}</td><td className="dir num">{percentual(o.executadoPct, 1)}</td>
-                  <td className="dir num">{moeda(o.pago)}</td><td className="dir num">{moeda(o.aPagar)}</td><td className="dir num">{moeda(o.contratado - o.medido)}</td>
+                  <td className="dir num">{moeda(o.pago)}</td><td className="dir num">{moeda(o.aPagar)}</td><td className="dir num">{moeda(o.saldo)}</td>
                   <td className="num">{o.vigenciaFim ? dataCurta(o.vigenciaFim) : "—"}</td></tr>
               ))}</tbody>
               <tfoot><tr><td>Total</td><td className="dir num">{moeda(t.contratado)}</td><td className="dir num">{moeda(t.medido)}</td><td className="dir num">{percentual(pct(t.medido, t.contratado), 1)}</td>
@@ -125,7 +125,7 @@ export default async function RelatorioGerencial({ searchParams }: { searchParam
         <Secao numero={n()} titulo="Metodologia e fontes">
           <ul className="rel-metodologia">
             <li><b>Semáforo:</b> crítico com IDP abaixo de {numero(LIMITES.idpCritico, 2)}, vigência do contrato encerrada ou não conformidade grave ou impeditiva aberta. Atenção com IDP abaixo de {numero(LIMITES.idpAtencao, 2)}, vigência terminando em até {LIMITES.vigenciaAviso} dias, mais de {LIMITES.diasSemMedicao} dias sem medição aprovada, medido mais de {LIMITES.medidoAFrente} pontos percentuais à frente do físico, não conformidade com prazo vencido, documento obrigatório faltando ou vencido, pessoa alocada com ASO ou treinamento vencido, ou obra paralisada.</li>
-            <li><b>Financeiro:</b> contratado é o valor atual dos contratos assinados; medido é o bruto das medições aprovadas; pago, os pagamentos registrados.</li>
+            <li><b>Financeiro:</b> contratado é o valor atual dos contratos assinados, com aditivos e reajustes; medido é o bruto das medições aprovadas; pago, os pagamentos registrados.</li>
             <li><b>Físico:</b> valor agregado e valor planejado da linha de base do cronograma, na data de emissão.</li>
             <li><b>Recorte:</b> obras da licitação ao recebimento provisório no seu acesso{qs ? ", com os filtros indicados no cabeçalho" : ""}.</li>
             <li><b>Fonte:</b> contratos, medições, pagamentos, cronogramas, não conformidades, documentos e equipes registrados no sistema.</li>

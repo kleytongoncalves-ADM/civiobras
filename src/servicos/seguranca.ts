@@ -1,6 +1,5 @@
 import { comContexto, ErroDeRegra } from "../lib/db";
-import { COLUNAS_FOTO, ctxCampo, dataValida, exigirVer, hoje, limpo, obraNoAcesso, obrasVisiveis, uuid, type FotoResumo, type ObraCampo } from "./campo";
-import { diasEntre } from "./cpm";
+import { COLUNAS_FOTO, ctxCampo, dataValida, diasSemAcidente, exigirVer, hoje, inicioDaObraSql, limpo, obraNoAcesso, obrasVisiveis, uuid, type FotoResumo, type ObraCampo } from "./campo";
 import type { Ator } from "./obras";
 import { exigir, pode } from "./permissoes";
 import { painelQualidade, type PainelQualidade } from "./qualidade";
@@ -36,7 +35,8 @@ export type PainelSeguranca = {
   podeRegistrar: boolean; podeEncerrar: boolean;
 };
 
-export async function painelSeguranca(a: Ator, obraId: string): Promise<PainelSeguranca> {
+/** completo: sem limite de linhas, para planilha e relatório. A tela mostra as 200 entregas de EPI mais recentes. */
+export async function painelSeguranca(a: Ator, obraId: string, completo = false): Promise<PainelSeguranca> {
   exigirVer(a, "seguranca.ver");
   const qualidade = await painelQualidade(a, obraId, "seguranca");
   return comContexto(ctxCampo(a), async (c) => {
@@ -44,13 +44,12 @@ export async function painelSeguranca(a: Ator, obraId: string): Promise<PainelSe
     const ocorrencias = (await c.query(`select ${COLUNAS} ${DE} where s.obra_id = $1 order by s.data desc, s.numero desc`, [obraId])).rows as OcorrenciaSeguranca[];
     const epis = (await c.query(
       `select e.id, to_char(e.data, 'YYYY-MM-DD') as data, e.trabalhador, e.funcao, e.empresa, e.epi, e.ca, e.quantidade, u.nome as por
-         from entrega_epi e left join usuario u on u.id = e.criado_por where e.obra_id = $1 order by e.data desc, e.criado_em desc limit 200`, [obraId])).rows;
+         from entrega_epi e left join usuario u on u.id = e.criado_por where e.obra_id = $1 order by e.data desc, e.criado_em desc${completo ? "" : " limit 200"}`, [obraId])).rows;
     const acid = ocorrencias.filter((o) => o.tipo === "acidente_com_afastamento" || o.tipo === "acidente_sem_afastamento");
     const ultimo = acid[0]?.data ?? null;
-    const desde = ultimo ?? obra.inicio;
     return {
       obra, ocorrencias, epis, qualidade,
-      diasSemAcidente: desde ? Math.max(0, diasEntre(desde, hoje())) : null, ultimoAcidente: ultimo,
+      diasSemAcidente: diasSemAcidente(ultimo, obra.inicio), ultimoAcidente: ultimo,
       acidentes: acid.length, afastamento: acid.reduce((s, o) => s + (o.diasAfastamento ?? 0), 0),
       quaseAcidentes: ocorrencias.filter((o) => o.tipo === "quase_acidente").length, riscos: ocorrencias.filter((o) => o.tipo === "risco_grave").length,
       abertas: ocorrencias.filter((o) => o.situacao === "aberta").length, vencidas: ocorrencias.filter((o) => o.vencida).length,
@@ -68,14 +67,13 @@ export async function resumoSeguranca(a: Ator) {
     return (await c.query(
       `select o.id, o.codigo, o.nome, o.situacao,
               (select to_char(max(data), 'YYYY-MM-DD') from ocorrencia_seguranca s where s.obra_id = o.id and s.tipo in ('acidente_com_afastamento', 'acidente_sem_afastamento')) as ultimo,
-              coalesce((select to_char(min(k.data_ordem_servico), 'YYYY-MM-DD') from contrato k where k.obra_id = o.id and k.situacao <> 'rascunho'), to_char(o.ordem_servico_data, 'YYYY-MM-DD')) as inicio,
+              ${inicioDaObraSql("o")} as inicio,
               (select count(*)::int from ocorrencia_seguranca s where s.obra_id = o.id and s.situacao = 'aberta') as abertas,
               (select count(*)::int from ocorrencia_seguranca s where s.obra_id = o.id and s.situacao = 'aberta' and s.prazo < hoje_local()) as vencidas,
               (select count(*)::int from nao_conformidade n where n.obra_id = o.id and n.area = 'seguranca' and n.situacao in ('aberta', 'corrigida')) as ncs,
               (select count(*)::int from ocorrencia_seguranca s where s.obra_id = o.id and s.tipo in ('acidente_com_afastamento', 'acidente_sem_afastamento')) as acidentes
          from obra o where o.situacao in ('em_execucao', 'paralisada') and ${v.sql} order by o.codigo`, v.params)).rows.map((r) => {
-      const desde = r.ultimo ?? r.inicio;
-      return { ...r, diasSemAcidente: desde ? Math.max(0, diasEntre(desde, hoje())) : null };
+      return { ...r, diasSemAcidente: diasSemAcidente(r.ultimo, r.inicio) };
     }) as { id: string; codigo: string; nome: string; ultimo: string | null; diasSemAcidente: number | null; abertas: number; vencidas: number; ncs: number; acidentes: number }[];
   });
 }

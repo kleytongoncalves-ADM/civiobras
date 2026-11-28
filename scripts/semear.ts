@@ -46,7 +46,7 @@ async function principal() {
   if (ja.rowCount) return console.log("Os dados de exemplo já estão carregados.");
 
   const orgaoId = (await pool().query(
-    "insert into orgao (nome, cnpj, esfera, uf, municipio) values ('Prefeitura de Vila Exemplo', $1, 'municipal', 'RJ', 'Vila Exemplo') returning id",
+    "insert into orgao (nome, cnpj, esfera, uf, municipio, demonstracao) values ('Prefeitura de Vila Exemplo', $1, 'municipal', 'RJ', 'Vila Exemplo', true) returning id",
     [CNPJ],
   )).rows[0].id as string;
 

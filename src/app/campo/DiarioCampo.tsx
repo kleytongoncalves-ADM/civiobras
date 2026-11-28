@@ -156,7 +156,7 @@ export function DiarioCampo() {
     const agora = new Date().toISOString();
     setEdicao({
       chave: novoId(), usuarioId: dados.usuario.id, obraId: obraSel.id, obraCodigo: obraSel.codigo, obraNome: obraSel.nome, data,
-      registradoEm: agora, alteradoEm: agora, climaManha: "bom", climaTarde: "bom", condicao: "praticavel", relato: "",
+      registradoEm: agora, alteradoEm: agora, climaManha: "", climaTarde: "", condicao: "praticavel", relato: "",
       linhas: [], assinar: false, comoComplemento: false, estado: "rascunho",
     });
   }
@@ -400,6 +400,7 @@ function Formulario({ inicial, dados, obra, aoGuardar, aoConcluir, aoCancelar, a
 
   function concluir() {
     if (vazio) { setErro("Registre o relato ou pelo menos uma linha."); return; }
+    if (!l.comoComplemento && (!l.climaManha || !l.climaTarde)) { setErro("Escolha o clima da manhã e da tarde."); return; }
     if (l.assinar && !l.relato.trim() && !l.linhas.some((x) => x.tipo === "servico" || x.tipo === "ocorrencia")) {
       setErro("Para assinar, registre o relato, um serviço ou uma ocorrência."); return;
     }
@@ -420,11 +421,13 @@ function Formulario({ inicial, dados, obra, aoGuardar, aoConcluir, aoCancelar, a
         {inicial.mensagem && inicial.estado === "recusado" && <div className="aviso aviso-erro" style={{ marginTop: 12 }}><AlertTriangle /><span>{inicial.mensagem}</span></div>}
         <div className="grade-form" style={{ marginTop: 14 }}>
           <div className="campo c4"><label htmlFor="cm">Clima pela manhã</label>
-            <select id="cm" className="entrada-texto" value={l.climaManha} onChange={(e) => mudar({ climaManha: e.target.value })}>
+            <select id="cm" className="entrada-texto" required value={l.climaManha} onChange={(e) => mudar({ climaManha: e.target.value })}>
+              <option value="" disabled>Escolha</option>
               {Object.entries(r.clima).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select></div>
           <div className="campo c4"><label htmlFor="ct">Clima à tarde</label>
-            <select id="ct" className="entrada-texto" value={l.climaTarde} onChange={(e) => mudar({ climaTarde: e.target.value })}>
+            <select id="ct" className="entrada-texto" required value={l.climaTarde} onChange={(e) => mudar({ climaTarde: e.target.value })}>
+              <option value="" disabled>Escolha</option>
               {Object.entries(r.clima).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select></div>
           <div className="campo c4"><label htmlFor="cd">Condição de trabalho</label>

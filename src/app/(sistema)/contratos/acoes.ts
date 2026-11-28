@@ -65,7 +65,13 @@ export async function acaoExecutor(id: string, itemId: string, _: Estado, f: For
 
 export async function acaoAssinar(id: string): Promise<Estado> {
   const a = await ator();
-  return executar(id, () => assinarContrato(a, id), "Contrato assinado.");
+  const res: { lb?: Awaited<ReturnType<typeof assinarContrato>> } = {};
+  const r = await executar(id, async () => { res.lb = await assinarContrato(a, id); });
+  const lb = res.lb;
+  if (r.erro) return r;
+  return { ok: lb === "gravada" ? "Contrato assinado. O cronograma foi gravado como linha de base."
+    : lb === "pendente" ? "Contrato assinado. O cronograma tem pendências e continua em elaboração; grave a linha de base quando resolver."
+    : "Contrato assinado." };
 }
 
 export async function acaoDesignar(id: string, _: Estado, f: FormData): Promise<Estado> {

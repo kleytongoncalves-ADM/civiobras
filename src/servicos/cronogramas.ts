@@ -256,7 +256,37 @@ async function pendencias(c: PoolClient, k: CabecalhoCronograma) {
 
 export async function gravarLinhaBase(a: Ator, id: string) {
   exigir(a, "cronograma.linha_base");
-  await comContexto(ctx(a), async (c) => {
+  await comContexto(ctx(a), (c) => fixarLinhaBase(c, a, id));
+}
+
+/**
+ * Ao assinar o contrato, o cronograma em elaboração vira a linha de base, se não tiver pendências.
+ * Roda na transação da assinatura; com pendências, o cronograma continua em elaboração.
+ */
+export async function linhaBaseNaAssinatura(c: PoolClient, a: Ator, contratoId: string): Promise<"gravada" | "pendente" | "sem_cronograma"> {
+  const r = (await c.query("select id from cronograma where contrato_id = $1 and situacao = 'rascunho' order by versao desc limit 1", [contratoId])).rows[0];
+  if (!r) return "sem_cronograma";
+  await c.query("savepoint linha_base");
+  try {
+    await fixarLinhaBase(c, a, r.id);
+    return "gravada";
+  } catch (e) {
+    await c.query("rollback to savepoint linha_base");
+    if (e instanceof ErroDeRegra) return "pendente";
+    throw e;
+  }
+}
+
+/** Aditivo assinado: abre uma nova versão do cronograma, em elaboração, para virar a nova linha de base. */
+export async function versaoParaAditivo(c: PoolClient, contratoId: string, motivo: string): Promise<string | null> {
+  const lb = (await c.query("select id from cronograma where contrato_id = $1 and situacao = 'linha_base'", [contratoId])).rows[0];
+  if (!lb) return null;
+  if ((await c.query("select 1 from cronograma where contrato_id = $1 and situacao = 'rascunho'", [contratoId])).rowCount) return null;
+  return copiarVersao(c, lb.id, contratoId, motivo);
+}
+
+async function fixarLinhaBase(c: PoolClient, a: Ator, id: string) {
+  {
     await c.query("select 1 from cronograma where id = $1 for update", [id]);
     const k = await cabecalho(c, a, id);
     if (k.situacao !== "rascunho") throw new ErroDeRegra("Este cronograma já é linha de base.");
@@ -264,7 +294,7 @@ export async function gravarLinhaBase(a: Ator, id: string) {
     if (p.length) throw new ErroDeRegra(`Resolva antes de gravar a linha de base: ${p.join(" ")}`);
     if (k.versao > 1 && !k.motivo) throw new ErroDeRegra("Informe o motivo da nova linha de base.");
     await recalcular(c, id);
-    const anterior = (await c.query("select id from cronograma where obra_id = $1 and situacao = 'linha_base'", [k.obraId])).rows[0];
+    const anterior = (await c.query("select id from cronograma where contrato_id = $1 and situacao = 'linha_base'", [k.contratoId])).rows[0];
     if (anterior) await c.query("update cronograma set situacao = 'substituido' where id = $1", [anterior.id]);
     await c.query("update cronograma set situacao = 'linha_base', linha_base_por = $2, linha_base_em = now() where id = $1", [id, a.id]);
     // O avanço já registrado acompanha a atividade de origem na nova linha de base.
@@ -277,7 +307,7 @@ export async function gravarLinhaBase(a: Ator, id: string) {
           where n.cronograma_id = $1 order by v.data, v.criado_em`, [id]);
       await c.query("select set_config('app.copiando_avanco', '', true)");
     }
-  });
+  }
 }
 
 export async function novaVersaoCronograma(a: Ator, id: string, motivo: string): Promise<string> {
@@ -289,11 +319,17 @@ export async function novaVersaoCronograma(a: Ator, id: string, motivo: string):
     if ((await c.query("select 1 from cronograma where contrato_id = $1 and situacao = 'rascunho'", [k.contratoId])).rowCount) {
       throw new ErroDeRegra("Já existe uma versão em elaboração.");
     }
-    const versao = (await c.query("select max(versao) + 1 as v from cronograma where contrato_id = $1", [k.contratoId])).rows[0].v;
+    return copiarVersao(c, id, k.contratoId, motivo.trim());
+  });
+}
+
+async function copiarVersao(c: PoolClient, id: string, contratoId: string, motivo: string): Promise<string> {
+  {
+    const versao = (await c.query("select max(versao) + 1 as v from cronograma where contrato_id = $1", [contratoId])).rows[0].v;
     const novo = (await c.query(
       `insert into cronograma (orgao_id, obra_id, contrato_id, versao, versao_anterior_id, inicio, calendario, unidade_periodo, motivo)
        select orgao_id, obra_id, contrato_id, $2, id, inicio, calendario, unidade_periodo, $3 from cronograma where id = $1 returning id`,
-      [id, versao, motivo.trim()])).rows[0].id as string;
+      [id, versao, motivo])).rows[0].id as string;
     await c.query(
       `insert into atividade (orgao_id, cronograma_id, origem_id, ordem, codigo, nome, duracao, item_servico_id, parcela, inicio, fim, folga, critica)
        select orgao_id, $2, id, ordem, codigo, nome, duracao, item_servico_id, parcela, inicio, fim, folga, critica from atividade where cronograma_id = $1`,
@@ -306,7 +342,7 @@ export async function novaVersaoCronograma(a: Ator, id: string, motivo: string):
          join atividade np on np.origem_id = d.predecessora_id and np.cronograma_id = $2
         where a.cronograma_id = $1`, [id, novo]);
     return novo;
-  });
+  }
 }
 
 export async function registrarAvanco(a: Ator, cronogramaId: string, atividadeId: string, d: { data: string; percentual: string; justificativa: string }) {

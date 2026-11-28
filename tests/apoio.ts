@@ -10,7 +10,7 @@ const HASH = gerarHashSenha(SENHA);
 
 export async function novoOrgao(nome = "Órgão de teste"): Promise<string> {
   const r = await pool().query(
-    "insert into orgao (nome, cnpj, esfera, uf, municipio) values ($1, $2, 'municipal', 'RJ', 'Vila Exemplo') returning id",
+    "insert into orgao (nome, cnpj, esfera, uf, municipio, demonstracao) values ($1, $2, 'municipal', 'RJ', 'Vila Exemplo', true) returning id",
     [nome, randomUUID()],
   );
   return r.rows[0].id;

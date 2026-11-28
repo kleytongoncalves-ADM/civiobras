@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra, type Contexto } from "../lib/db";
-import { ajustar, dec, div, lerNumeroBr, mul, paraNumero, texto, UM, ZERO, type Dec } from "../lib/decimal";
+import { ajustar, dec, div, lerNumeroBr, lerValorBr, mul, paraNumero, texto, UM, ZERO, type Dec } from "../lib/decimal";
+import { versaoParaAditivo } from "./cronogramas";
 import { anoDepois, contratoNaTransacao, LIMITE_ADITIVO, type Executor, type ResumoContrato } from "./contratos";
 import { somarDias } from "./cpm";
 import type { Ator } from "./obras";
@@ -292,7 +293,7 @@ export async function incluirItem(a: Ator, id: string, d: DadosItemNovo): Promis
   if (!d.descricao.trim()) throw new ErroDeRegra("Informe a descrição do serviço.");
   if (!d.unidade.trim()) throw new ErroDeRegra("Informe a unidade.");
   const q = lerNumeroBr(d.quantidade);
-  const pu = lerNumeroBr(d.precoUnitario);
+  const pu = lerValorBr(d.precoUnitario);
   if (q == null || q <= ZERO) throw new ErroDeRegra("Informe a quantidade.");
   if (pu == null || pu <= ZERO) throw new ErroDeRegra("Informe o preço unitário.");
   const fonte = d.fonte && FONTES.includes(d.fonte) ? d.fonte : "cotacao";
@@ -340,6 +341,8 @@ export async function assinarAditivo(a: Ator, id: string, dataAssinatura: string
     if (d.situacao !== "rascunho") throw new ErroDeRegra("Este aditivo já foi assinado ou cancelado.");
     await c.query("select 1 from contrato where id = $1 for update", [d.contratoId]);
     await c.query("update aditivo set situacao = 'assinado', data_assinatura = $2, assinado_por = $3, assinado_em = now() where id = $1", [id, dataAssinatura, a.id]);
+    // Nova versão do cronograma, em elaboração, para gravar a nova linha de base com o aditivo.
+    await versaoParaAditivo(c, d.contratoId, rotuloAditivo(d).replace(/^./, (x) => x.toUpperCase()));
   });
 }
 

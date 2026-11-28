@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { comContexto, ErroDeRegra } from "../lib/db";
-import { lerNumeroBr, texto } from "../lib/decimal";
+import { lerNumeroBr, lerValorBr, texto } from "../lib/decimal";
 import { ctxCampo, dataValida, exigirVer, hoje, limpo, obraNoAcesso, obrasVisiveis, uuid, type ObraCampo } from "./campo";
 import type { Ator } from "./obras";
 import { exigir, pode } from "./permissoes";
@@ -30,7 +30,11 @@ export function quantidade(v: string | number | null | undefined, rotulo = "Quan
   if (d == null || d < 0n || (!zeroOk && d === 0n)) throw new ErroDeRegra(`${rotulo} inválida.`);
   return texto(d, 4);
 }
-const preco = (v: string | number | null | undefined, rotulo = "Preço") => quantidade(v, rotulo);
+const preco = (v: string | number | null | undefined, rotulo = "Preço") => {
+  const d = lerValorBr(String(v ?? ""));
+  if (d == null || d <= 0n) throw new ErroDeRegra(`${rotulo} inválido.`);
+  return texto(d, 4);
+};
 
 // ---------------------------------------------------------------------------
 // Materiais
@@ -153,7 +157,8 @@ async function estoqueDaObra(c: PoolClient, obraId: string): Promise<LinhaEstoqu
   return (await c.query(ESTOQUE_SQL, [obraId])).rows.map((r) => ({ ...r, abaixoMinimo: r.minimo != null && r.saldo < r.minimo }));
 }
 
-export async function painelSuprimentos(a: Ator, obraId: string): Promise<PainelSuprimentos> {
+/** completo: sem limite de linhas, para planilha e relatório. A tela mostra os 80 movimentos mais recentes. */
+export async function painelSuprimentos(a: Ator, obraId: string, completo = false): Promise<PainelSuprimentos> {
   exigirVer(a, "suprimentos.ver");
   return comContexto(ctxCampo(a), async (c) => {
     const obra = await obraNoAcesso(c, a, obraId);
@@ -180,7 +185,7 @@ export async function painelSuprimentos(a: Ator, obraId: string): Promise<Painel
          left join item_servico i on i.id = x.item_servico_id left join obra od on od.id = x.obra_destino_id
          left join movimento_estoque px on px.id = x.par_id left join obra oo on oo.id = px.obra_id
          left join usuario u on u.id = x.criado_por
-        where x.obra_id = $1 order by x.data desc, x.criado_em desc limit 80`, [obraId])).rows;
+        where x.obra_id = $1 order by x.data desc, x.criado_em desc${completo ? "" : " limit 80"}`, [obraId])).rows;
     const perdas = await perdasDaObra(c, obraId);
     const itens = await itensDaObra(c, obraId);
     const materiais = (await c.query("select id, descricao, unidade, codigo from material where ativo order by descricao")).rows;

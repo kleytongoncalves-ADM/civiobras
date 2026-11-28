@@ -133,7 +133,7 @@ describe("documentos", () => {
 describe("painel gerencial", () => {
   const base: Omit<ObraGerencial, "nivel" | "motivos"> = {
     id: "o1", codigo: "OB-1", nome: "Obra", tipo: "edificacao", forma: "contratada", situacao: "em_execucao", unidade: null, unidadeId: null,
-    latitude: null, longitude: null, contratado: 1000, medido: 500, pago: 400, aPagar: 100, executadoPct: 50, previstoPct: 50, realizadoPct: 50, idp: 1,
+    latitude: null, longitude: null, contratado: 1000, saldo: 500, medido: 500, pago: 400, aPagar: 100, executadoPct: 50, previstoPct: 50, realizadoPct: 50, idp: 1,
     ultimaMedicao: "2026-11-01", vigenciaFim: "2027-06-30", diasVigencia: 200, ncsGraves: 0, ncsVencidas: 0, documentosVencidos: 0, exigenciasFaltando: 0, habilitacoesVencidas: 0,
   };
   const H = "2026-11-25";

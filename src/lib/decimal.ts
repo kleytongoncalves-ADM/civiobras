@@ -38,6 +38,16 @@ export function lerNumeroBr(t: string): Dec | null {
   return dec(normal);
 }
 
+/**
+ * Lê valor em reais. Igual a lerNumeroBr, mas "1.500" e "12.345.678" (pontos de milhar, sem vírgula)
+ * valem 1500 e 12345678. Só para campos de dinheiro; quantidades continuam com lerNumeroBr.
+ */
+export function lerValorBr(t: string): Dec | null {
+  const s = t.trim().replace(/\s/g, "");
+  if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(s)) return dec(s.replace(/\./g, ""));
+  return lerNumeroBr(s);
+}
+
 export const soma = (...v: Dec[]) => v.reduce((a, b) => a + b, 0n);
 export const mul = (a: Dec, b: Dec): Dec => (a * b) / ESCALA;
 export const div = (a: Dec, b: Dec): Dec => {

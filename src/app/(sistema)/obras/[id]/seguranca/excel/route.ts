@@ -11,7 +11,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!u) return new Response("Sessão encerrada.", { status: 401 });
   let p;
   try {
-    p = await painelSeguranca(comoAtor(u), id);
+    p = await painelSeguranca(comoAtor(u), id, true);
   } catch (e) {
     if (e instanceof ErroDeRegra || e instanceof SemPermissao) return new Response(e.message, { status: 404 });
     throw e;
@@ -23,7 +23,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     ["Último acidente", p.ultimoAcidente ? dataCurta(p.ultimoAcidente) : "Nenhum"],
     ["Ocorrências", `${p.acidentes} ${p.acidentes === 1 ? "acidente" : "acidentes"}, ${p.quaseAcidentes} ${p.quaseAcidentes === 1 ? "quase acidente" : "quase acidentes"}, ${p.riscos} ${p.riscos === 1 ? "risco grave" : "riscos graves"}`],
     ["Ações corretivas abertas", `${p.abertas} (${p.vencidas} vencidas)`],
-  ], [["Dias sem acidente", p.diasSemAcidente ?? 0, "0"], ["Dias de afastamento", p.afastamento, "0"], ["Horas paralisadas", p.horasParalisadas, "0.0"]]);
+    ...(p.diasSemAcidente == null ? [["Dias sem acidente", "Obra sem data de início"] as [string, string]] : []),
+  ], [...(p.diasSemAcidente == null ? [] : [["Dias sem acidente", p.diasSemAcidente, "0"] as [string, number, string]]), ["Dias de afastamento", p.afastamento, "0"], ["Horas paralisadas", p.horasParalisadas, "0.0"]]);
   await abaTabela(wb, doc, "Ocorrências", {
     titulo: "Ocorrências de segurança", paisagem: true,
     colunas: [

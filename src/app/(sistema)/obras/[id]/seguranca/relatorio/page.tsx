@@ -19,7 +19,7 @@ export default async function RelatorioSeguranca({ params }: { params: Promise<{
   const u = await exigirUsuario();
   let p;
   try {
-    p = await painelSeguranca(comoAtor(u), id);
+    p = await painelSeguranca(comoAtor(u), id, true);
   } catch (e) {
     if (e instanceof ErroDeRegra || e instanceof SemPermissao) notFound();
     throw e;
@@ -29,7 +29,7 @@ export default async function RelatorioSeguranca({ params }: { params: Promise<{
   for (const e of p.epis) epis.set(e.epi, (epis.get(e.epi) ?? 0) + e.quantidade);
   const ncs = p.qualidade.ncs.filter((n) => n.situacao === "aberta" || n.situacao === "corrigida");
   const pontos: string[] = [];
-  pontos.push(p.ultimoAcidente ? `${p.diasSemAcidente} dias sem acidente desde ${dataCurta(p.ultimoAcidente)}.` : `${p.diasSemAcidente ?? 0} dias sem acidente desde o início da obra.`);
+  if (p.diasSemAcidente != null) pontos.push(p.ultimoAcidente ? `${p.diasSemAcidente} dias sem acidente desde ${dataCurta(p.ultimoAcidente)}.` : `${p.diasSemAcidente} dias sem acidente desde o início da obra.`);
   if (p.vencidas) pontos.push(`${p.vencidas} ${p.vencidas === 1 ? "ação corretiva vencida" : "ações corretivas vencidas"}.`);
   if (p.horasParalisadas) pontos.push(`${numero(p.horasParalisadas, 1)} h de frente paralisada por risco à segurança.`);
   if (ncs.length) pontos.push(`${ncs.length} ${ncs.length === 1 ? "não conformidade de segurança em aberto" : "não conformidades de segurança em aberto"}.`);
@@ -45,7 +45,7 @@ export default async function RelatorioSeguranca({ params }: { params: Promise<{
       </div>
       <article className="rel">
         <CabecalhoRelatorio orgao={u.orgaoNome} tipo="Relatório de segurança do trabalho" titulo={`Segurança · ${p.obra.codigo}`} subtitulo={p.obra.nome}
-          selo={{ texto: `${p.diasSemAcidente ?? 0} dias sem acidente`, cor: p.acidentes && p.diasSemAcidente != null && p.diasSemAcidente < 30 ? "laranja" : "verde" }}
+          selo={{ texto: p.diasSemAcidente == null ? "Obra sem data de início" : `${p.diasSemAcidente} dias sem acidente`, cor: p.acidentes && p.diasSemAcidente != null && p.diasSemAcidente < 30 ? "laranja" : "verde" }}
           dados={[["Obra", `${p.obra.codigo} · ${p.obra.nome}`], ["Posição em", dataHora(new Date())], ["Ocorrências", String(p.ocorrencias.length)], ["Entregas de EPI", String(p.epis.length)]]} />
         <Secao numero={n()} titulo="Resumo executivo">
           <Indicadores itens={[

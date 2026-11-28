@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { armazenamento, armazenamentoObrigatorio, caminhoDoArquivo, extensaoDoMime } from "../lib/armazenamento";
 import { comContexto, ErroDeRegra, type Contexto } from "../lib/db";
-import { diaDeTrabalho, somarDias, type Calendario } from "./cpm";
+import { diaDeTrabalho, diasEntre, somarDias, type Calendario } from "./cpm";
 import type { Ator } from "./obras";
 import { exigir, pode, SemPermissao, type Acao } from "./permissoes";
 import type { Situacao } from "./rotulos";
@@ -19,14 +19,27 @@ export const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/
 export type ObraCampo = { id: string; codigo: string; nome: string; situacao: Situacao; inicio: string | null; latitude: number | null; longitude: number | null };
 export const OBRA_EM_CAMPO: Situacao[] = ["em_execucao", "paralisada", "concluida"];
 
+/** Início da obra: primeira ordem de serviço de contrato, a ordem de serviço da obra ou o primeiro diário. */
+export const inicioDaObraSql = (o: string) =>
+  `to_char(coalesce((select min(k.data_ordem_servico) from contrato k where k.obra_id = ${o}.id and k.situacao <> 'rascunho'),
+                    ${o}.ordem_servico_data, (select min(d.data) from diario d where d.obra_id = ${o}.id)), 'YYYY-MM-DD')`;
+
+/**
+ * Dias sem acidente: desde o último acidente registrado na obra; sem nenhum, desde o início da obra.
+ * Obra sem data de início (ou que ainda não começou) fica sem contagem.
+ */
+export function diasSemAcidente(ultimoAcidente: string | null, inicio: string | null, h = hoje()): number | null {
+  const desde = ultimoAcidente ?? inicio;
+  return desde && desde <= h ? diasEntre(desde, h) : null;
+}
+
 /** Obra no acesso do usuário. Direção vê todas; os demais, as obras a que estão vinculados. */
 export async function obraNoAcesso(c: PoolClient, a: Ator, obraId: string): Promise<ObraCampo> {
   if (!uuid(obraId)) throw new ErroDeRegra("Obra não encontrada.");
   const todas = pode(a, "obra.ver_todas");
   const r = await c.query(
     `select o.id, o.codigo, o.nome, o.situacao, o.latitude::float8 as latitude, o.longitude::float8 as longitude,
-            to_char(coalesce((select min(k.data_ordem_servico) from contrato k where k.obra_id = o.id and k.situacao <> 'rascunho'),
-                             o.ordem_servico_data, (select min(d.data) from diario d where d.obra_id = o.id)), 'YYYY-MM-DD') as inicio
+            ${inicioDaObraSql("o")} as inicio
        from obra o
       where o.id = $1 and (${todas ? "true" : "exists (select 1 from vinculo_obra v where v.obra_id = o.id and v.usuario_id = $2 and (v.fim is null or v.fim >= hoje_local()))"})`,
     todas ? [obraId] : [obraId, a.id]);
