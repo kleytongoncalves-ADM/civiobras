@@ -248,7 +248,7 @@ async function emLotes<T>(lista: T[], tamanho: number, fn: (lote: T[]) => Promis
  * Depois confere o custo de cada composição calculado pelo sistema contra o publicado.
  * Até 2% de composições divergentes (mais de 1% ou R$ 0,05 de diferença), a tabela é liberada.
  */
-export async function gravarCargaSinapi(c: PoolClient, carga: CargaSinapi, fonte: "sinapi" | "sicro" | "demonstracao" = "sinapi"): Promise<ResultadoCarga[]> {
+export async function gravarCargaSinapi(c: PoolClient, carga: CargaSinapi, fonte: "sinapi" | "sicro" | "sco" | "demonstracao" = "sinapi"): Promise<ResultadoCarga[]> {
   await c.query("select set_config('app.carga_precos', 'sim', true)");
 
   // No SICRO o coeficiente já leva o FIC, que muda de UF para UF. A estrutura é guardada por mês,

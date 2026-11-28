@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Boxes, Plus, Search } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
 import { ErroDeRegra } from "@/lib/db";
-import { dataHora, moeda, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataHora, moeda, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { medidaDaUnidade, obterLeituraIfc, ROTULO_MEDIDA, SEM_TIPO, UNIDADE_MEDIDA, type MedidaLancamento, type QuantitativoIfc } from "@/servicos/ifc";
 import { buscarComposicoes, buscarInsumos, ROTULO_FONTE, ROTULO_TIPO_INSUMO } from "@/servicos/precos";
 import { carregarOrcamento } from "../../carregar";
@@ -145,7 +145,7 @@ export default async function LeituraIfc({ params, searchParams }: { params: Pro
                 <td>
                   {g.lancamentos.map((x) => (
                     <div key={x.id} className="fraco" style={{ fontSize: 12 }}>
-                      <Link href={`/orcamentos/${id}/itens/${x.itemId}`} className="link-item">{x.codigo ? `${x.codigo} · ` : ""}{x.descricao.length > 48 ? `${x.descricao.slice(0, 48)}…` : x.descricao}</Link> <span className="num">{quantidade(x.quantidade)} {unidadeMedida(x.unidade)}</span>
+                      <Link href={`/orcamentos/${id}/itens/${x.itemId}`} className="link-item">{x.codigo ? `${x.codigo} · ` : ""}{x.descricao.length > 48 ? resumir(x.descricao, 48) : x.descricao}</Link> <span className="num">{quantidade(x.quantidade)} {unidadeMedida(x.unidade)}</span>
                     </div>
                   ))}
                   {editavel && <Link href={linkGrupo(g.id)} className="botao botao-texto botao-pequeno"><Plus /> Lançar</Link>}

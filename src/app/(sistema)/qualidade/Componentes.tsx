@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
-import { dataCurta } from "@/lib/formato";
+import { dataCurta, resumir } from "@/lib/formato";
 import {
   MODELOS, PRAZO_PADRAO, ROTULO_GRAVIDADE, ROTULO_ORIGEM_NC, ROTULO_SITUACAO_NC, rotuloNc,
   type Area, type Gravidade, type Inspecao, type ItemObra, type NaoConformidade, type SituacaoNc,
@@ -62,7 +62,7 @@ export function NovaNc({ obraId, area, itens, hoje }: { obraId: string; area: Ar
         <div className="campo c6"><label htmlFor="nc-i">Item da planilha</label>
           <select id="nc-i" name="itemServicoId" className="entrada-texto" defaultValue="">
             <option value="">Sem item</option>
-            {itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 70)}</option>)}
+            {itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 70)}</option>)}
           </select></div>
         <div className="campo c6"><label htmlFor="nc-r">Responsável pela correção</label><input id="nc-r" name="responsavel" className="entrada-texto" required /></div>
         <div className="campo c3"><label htmlFor="nc-p">Prazo</label><input id="nc-p" name="prazo" type="date" min={hoje} className="entrada-texto" /></div>

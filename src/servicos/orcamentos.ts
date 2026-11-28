@@ -35,7 +35,13 @@ export type Cabecalho = {
 };
 
 export type Cotacao = { id: string; fornecedor: string; cnpj: string | null; data: string; valor: string; validade: string | null };
-export type InsumoDoItem = { id: string; codigo: string; descricao: string; unidade: string; tipo: TipoInsumo; coeficiente: string; preco: string | null };
+export type InsumoDoItem = {
+  id: string; codigo: string; descricao: string; unidade: string; tipo: TipoInsumo; coeficiente: string; preco: string | null;
+  fonte: Fonte | null; ordem: number | null;
+  auxiliarCodigo: string | null; auxiliarDescricao: string | null; auxiliarUnidade: string | null; auxiliarCoeficiente: string | null;
+};
+/** Base de preços usada no orçamento: a principal e as dos itens lançados de outra fonte. */
+export type BaseDoOrcamento = { tabelaId: string; fonte: Fonte; mes: string; regime: Regime; principal: boolean; itens: number };
 
 export type Item = {
   id: string; etapaId: string; ordem: number; numero: string; modo: ModoItem; fonte: Fonte; codigo: string | null;
@@ -43,6 +49,9 @@ export type Item = {
   material: string; maoDeObra: string; equipamento: string; tipoBdi: "obra" | "fornecimento";
   memoria: string | null; criterioCotacao: CriterioCotacao | null; justificativa: string | null;
   composicaoId: string | null; insumoId: string | null;
+  /** Base do item (fonte, mês e regime), que pode ser outra além da principal. */
+  tabelaId: string | null; baseMes: string | null; baseRegime: Regime | null;
+  assuntoId: string | null; classificacao: string | null;
   cotacoes: Cotacao[];
   custoTotal: string; precoUnitario: string; total: string; semPreco: boolean;
   materialTotal: string; maoDeObraTotal: string; equipamentoTotal: string;
@@ -53,6 +62,8 @@ export type Etapa = { id: string; ordem: number; nome: string; itens: Item[]; to
 
 export type OrcamentoCompleto = Cabecalho & {
   etapas: Etapa[];
+  bases: BaseDoOrcamento[];
+  modoMontagem: "assunto" | "livre" | null;
   totais: Totais;
   bdiObraPct: string; bdiFornecimentoPct: string;
   avisosBdi: AvisoBdi[];
@@ -204,6 +215,106 @@ export async function salvarDadosGerais(a: Ator, id: string, d: DadosGerais) {
 }
 
 // ---------------------------------------------------------------------------
+// Montagem: modo (por assunto ou livre) e bases usadas
+// ---------------------------------------------------------------------------
+export type BaseDisponivel = { tabelaId: string; fonte: Fonte; mes: string; regime: Regime; principal: boolean; escolhida: boolean };
+
+/**
+ * Bases que podem entrar no orçamento: a principal e, de cada outra fonte oficial (SINAPI, SICRO, SCO-Rio),
+ * a tabela liberada mais recente da mesma UF, no mesmo regime quando houver.
+ */
+export async function basesDisponiveis(a: Ator, orcamentoId: string): Promise<BaseDisponivel[]> {
+  return comContexto(ctx(a), async (c) => {
+    await cabecalho(c, a, orcamentoId);
+    const r = await c.query(
+      `with o as (select * from orcamento where id = $1),
+            candidatas as (
+              select distinct on (t.fonte) t.id, t.fonte, t.mes, t.regime
+                from tabela_preco t, o
+               where t.situacao = 'liberada' and t.uf = o.uf and t.fonte in ('sinapi', 'sicro', 'sco') and t.fonte <> o.fonte
+                 and t.orgao_id is not distinct from (select orgao_id from tabela_preco where id = o.tabela_id)
+               order by t.fonte, t.mes desc, (t.regime = o.regime) desc)
+       select t.id as "tabelaId", t.fonte, to_char(t.mes, 'YYYY-MM') as mes, t.regime, true as principal, true as escolhida
+         from o join tabela_preco t on t.id = o.tabela_id
+       union all
+       select x.id, x.fonte, to_char(x.mes, 'YYYY-MM'), x.regime, false, x.id = any(o.tabelas_extras) from candidatas x, o
+       union all
+       select t.id, t.fonte, to_char(t.mes, 'YYYY-MM'), t.regime, false, true
+         from o join tabela_preco t on t.id = any(o.tabelas_extras) where t.id not in (select id from candidatas)`,
+      [orcamentoId]);
+    return r.rows;
+  });
+}
+
+/** Grava o modo de montagem e as bases extras. Uma base com itens lançados não sai. */
+export async function configurarMontagem(a: Ator, orcamentoId: string, d: { modo: "assunto" | "livre"; tabelasExtras: string[] }) {
+  if (d.modo !== "assunto" && d.modo !== "livre") throw new ErroDeRegra("Escolha como montar o orçamento.");
+  await comContexto(ctx(a), async (c) => {
+    const o = await emRascunho(c, a, orcamentoId);
+    const extras = [...new Set(d.tabelasExtras.filter((x) => uuid(x) && x !== o.tabelaId))];
+    if (extras.length) {
+      const ok = (await c.query("select id from tabela_preco where id = any($1::uuid[]) and situacao = 'liberada' and uf = $2", [extras, o.uf])).rows;
+      if (ok.length !== extras.length) throw new ErroDeRegra("Uma das bases escolhidas não está liberada para esta UF.");
+    }
+    const emUso = (await c.query(
+      `select distinct t.id from orcamento_item i join tabela_preco t on t.id = i.tabela_id
+        where i.orcamento_id = $1 and i.tabela_id <> $2`, [orcamentoId, o.tabelaId])).rows.map((l) => l.id as string);
+    await c.query("update orcamento set modo_montagem = $2, tabelas_extras = $3 where id = $1", [orcamentoId, d.modo, [...new Set([...extras, ...emUso])]]);
+  });
+}
+
+/** Etapa com o nome dado; cria no fim quando não existe (usado ao lançar pelo assunto). */
+export async function etapaPeloNome(a: Ator, orcamentoId: string, nome: string): Promise<string> {
+  const n = nome.trim();
+  if (!n) throw new ErroDeRegra("Informe o nome da etapa.");
+  const existente = await comContexto(ctx(a), async (c) => {
+    await emRascunho(c, a, orcamentoId);
+    return (await c.query("select id from orcamento_etapa where orcamento_id = $1 and lower(nome) = lower($2) order by ordem limit 1", [orcamentoId, n])).rows[0]?.id as string | undefined;
+  });
+  return existente ?? adicionarEtapa(a, orcamentoId, n);
+}
+
+/** Move uma etapa uma posição para cima ou para baixo. */
+export async function moverEtapa(a: Ator, orcamentoId: string, etapaId: string, sentido: "subir" | "descer") {
+  await comContexto(ctx(a), async (c) => {
+    await emRascunho(c, a, orcamentoId);
+    const e = (await c.query("select ordem from orcamento_etapa where id = $1 and orcamento_id = $2", [etapaId, orcamentoId])).rows[0];
+    if (!e) throw new ErroDeRegra("Etapa não encontrada.");
+    const outra = (await c.query(
+      `select id, ordem from orcamento_etapa where orcamento_id = $1 and ordem ${sentido === "subir" ? "<" : ">"} $2
+        order by ordem ${sentido === "subir" ? "desc" : "asc"} limit 1`, [orcamentoId, e.ordem])).rows[0];
+    if (!outra) return;
+    // A ordem única é conferida só no fim da transação, então a troca é direta.
+    await c.query("update orcamento_etapa set ordem = $2 where id = $1", [outra.id, e.ordem]);
+    await c.query("update orcamento_etapa set ordem = $2 where id = $1", [etapaId, outra.ordem]);
+  });
+}
+
+/** Move um item para outra etapa (vai para o fim dela) ou uma posição para cima ou para baixo na mesma etapa. */
+export async function moverItem(a: Ator, orcamentoId: string, itemId: string, d: { etapaId?: string; sentido?: "subir" | "descer" }) {
+  await comContexto(ctx(a), async (c) => {
+    await emRascunho(c, a, orcamentoId);
+    const i = (await c.query("select id, etapa_id, ordem from orcamento_item where id = $1 and orcamento_id = $2", [itemId, orcamentoId])).rows[0];
+    if (!i) throw new ErroDeRegra("Item não encontrado.");
+    if (d.etapaId && d.etapaId !== i.etapa_id) {
+      await etapaDoOrcamento(c, orcamentoId, d.etapaId);
+      await c.query("update orcamento_item set etapa_id = $2, ordem = $3 where id = $1", [itemId, d.etapaId, await proximaOrdem(c, d.etapaId)]);
+      await c.query(
+        `update orcamento_item t set ordem = x.n from (select id, row_number() over (order by ordem) as n from orcamento_item where etapa_id = $1) x
+          where t.id = x.id and t.ordem <> x.n`, [i.etapa_id]);
+      return;
+    }
+    if (!d.sentido) return;
+    const outro = (await c.query(
+      `select id, ordem from orcamento_item where etapa_id = $1 and ordem ${d.sentido === "subir" ? "<" : ">"} $2
+        order by ordem ${d.sentido === "subir" ? "desc" : "asc"} limit 1`, [i.etapa_id, i.ordem])).rows[0];
+    if (!outro) return;
+    await c.query("update orcamento_item set ordem = $2 where id = $1", [outro.id, i.ordem]);
+    await c.query("update orcamento_item set ordem = $2 where id = $1", [itemId, outro.ordem]);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Etapas
 // ---------------------------------------------------------------------------
 export async function adicionarEtapa(a: Ator, orcamentoId: string, nome: string): Promise<string> {
@@ -240,7 +351,11 @@ export async function removerEtapa(a: Ator, orcamentoId: string, etapaId: string
 // ---------------------------------------------------------------------------
 // Itens
 // ---------------------------------------------------------------------------
-type LinhaCongelada = { codigo: string; descricao: string; unidade: string; tipo: TipoInsumo; coeficiente: string; preco: string | null };
+type LinhaCongelada = {
+  codigo: string; descricao: string; unidade: string; tipo: TipoInsumo; coeficiente: string; preco: string | null;
+  fonte?: Fonte | null; ordem?: number | null;
+  auxiliar_codigo?: string | null; auxiliar_descricao?: string | null; auxiliar_unidade?: string | null; auxiliar_coeficiente?: string | null;
+};
 
 function custoDasLinhas(linhas: LinhaCongelada[], regra: Regra) {
   return custoUnitario(linhas.map((l) => ({ coeficiente: dec(l.coeficiente), preco: l.preco == null ? null : dec(l.preco), tipo: l.tipo })), regra);
@@ -248,12 +363,16 @@ function custoDasLinhas(linhas: LinhaCongelada[], regra: Regra) {
 
 async function linhasDaComposicao(c: PoolClient, composicaoId: string, tabelaId: string): Promise<LinhaCongelada[]> {
   const r = await c.query(
-    `select i.codigo, i.descricao, i.unidade, i.tipo, round(x.coeficiente, 7)::text as coeficiente, p.preco::text as preco
-       from insumos_da_composicao($1, (select mes from tabela_preco where id = $2)) x
+    // Mesmo resultado de insumos_da_composicao, separado pela composição auxiliar de primeiro nível.
+    `select i.codigo, i.descricao, i.unidade, i.tipo, round(x.coeficiente, 7)::text as coeficiente, p.preco::text as preco,
+            i.fonte, x.ordem, ka.codigo as auxiliar_codigo, ka.descricao as auxiliar_descricao, ka.unidade as auxiliar_unidade,
+            round(x.auxiliar_coeficiente, 7)::text as auxiliar_coeficiente
+       from insumos_por_auxiliar($1, (select mes from tabela_preco where id = $2)) x
        join insumo i on i.id = x.insumo_id
+       left join composicao ka on ka.id = x.auxiliar_id
        left join preco_insumo p on p.insumo_id = x.insumo_id and p.tabela_id = $2
       where round(x.coeficiente, 7) > 0
-      order by i.tipo, i.descricao`,
+      order by x.ordem, i.tipo, i.descricao`,
     [composicaoId, tabelaId],
   );
   return r.rows;
@@ -279,32 +398,68 @@ async function etapaDoOrcamento(c: PoolClient, orcamentoId: string, etapaId: str
 async function inserirItem(
   c: PoolClient, a: Ator, o: Cabecalho, etapaId: string,
   d: { modo: ModoItem; fonte: Fonte; codigo: string | null; descricao: string; unidade: string; quantidade: string; tipoBdi?: "obra" | "fornecimento";
-       memoria?: string | null; composicaoId?: string | null; insumoId?: string | null; criterio?: CriterioCotacao | null; justificativa?: string | null },
+       memoria?: string | null; composicaoId?: string | null; insumoId?: string | null; criterio?: CriterioCotacao | null; justificativa?: string | null;
+       tabelaId?: string | null; assuntoId?: string | null; classificacao?: string | null },
   linhas: LinhaCongelada[],
 ) {
   const cu = custoDasLinhas(linhas, o.arredondamento);
   const semPreco = cu.semPreco;
   const r = await c.query(
     `insert into orcamento_item (orgao_id, orcamento_id, etapa_id, ordem, modo, fonte, codigo, descricao, unidade, quantidade,
-        custo_unitario, custo_material, custo_mao_obra, custo_equipamento, tipo_bdi, memoria, composicao_id, insumo_id, criterio_cotacao, justificativa)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning id`,
+        custo_unitario, custo_material, custo_mao_obra, custo_equipamento, tipo_bdi, memoria, composicao_id, insumo_id, criterio_cotacao, justificativa,
+        tabela_id, assunto_id, classificacao)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) returning id`,
     [a.orgaoId, o.id, etapaId, await proximaOrdem(c, etapaId), d.modo, d.fonte, d.codigo, d.descricao, d.unidade, d.quantidade,
       semPreco ? null : texto(cu.total), semPreco ? null : texto(cu.material), semPreco ? null : texto(cu.maoDeObra), semPreco ? null : texto(cu.equipamento),
-      d.tipoBdi ?? "obra", d.memoria?.trim() || null, d.composicaoId ?? null, d.insumoId ?? null, d.criterio ?? null, d.justificativa?.trim() || null],
+      d.tipoBdi ?? "obra", d.memoria?.trim() || null, d.composicaoId ?? null, d.insumoId ?? null, d.criterio ?? null, d.justificativa?.trim() || null,
+      d.modo === "cotacao" ? null : d.tabelaId ?? o.tabelaId, d.assuntoId ?? null, d.classificacao ?? null],
   );
   const itemId = r.rows[0].id as string;
-  if (linhas.length) {
-    await c.query(
-      `insert into orcamento_item_insumo (orgao_id, item_id, codigo, descricao, unidade, tipo, coeficiente, preco)
-       select $1, $2, * from unnest($3::text[], $4::text[], $5::text[], $6::tipo_insumo[], $7::numeric[], $8::numeric[])`,
-      [a.orgaoId, itemId, linhas.map((l) => l.codigo), linhas.map((l) => l.descricao), linhas.map((l) => l.unidade),
-        linhas.map((l) => l.tipo), linhas.map((l) => l.coeficiente), linhas.map((l) => l.preco)],
-    );
-  }
+  await gravarLinhas(c, a.orgaoId, itemId, linhas);
   return itemId;
 }
 
-export type NovoItemBase = { etapaId: string; quantidade: string; memoria?: string | null; tipoBdi?: "obra" | "fornecimento" };
+/** Grava as linhas congeladas do item, com a fonte e a composição auxiliar de cada uma. */
+async function gravarLinhas(c: PoolClient, orgaoId: string, itemId: string, linhas: LinhaCongelada[]) {
+  if (!linhas.length) return;
+  await c.query(
+    `insert into orcamento_item_insumo (orgao_id, item_id, codigo, descricao, unidade, tipo, coeficiente, preco,
+        fonte, ordem, auxiliar_codigo, auxiliar_descricao, auxiliar_unidade, auxiliar_coeficiente)
+     select $1, $2, * from unnest($3::text[], $4::text[], $5::text[], $6::tipo_insumo[], $7::numeric[], $8::numeric[],
+        $9::fonte_preco[], $10::int[], $11::text[], $12::text[], $13::text[], $14::numeric[])`,
+    [orgaoId, itemId, linhas.map((l) => l.codigo), linhas.map((l) => l.descricao), linhas.map((l) => l.unidade),
+      linhas.map((l) => l.tipo), linhas.map((l) => l.coeficiente), linhas.map((l) => l.preco),
+      linhas.map((l) => l.fonte ?? null), linhas.map((l, i) => l.ordem ?? i), linhas.map((l) => l.auxiliar_codigo ?? null),
+      linhas.map((l) => l.auxiliar_descricao ?? null), linhas.map((l) => l.auxiliar_unidade ?? null), linhas.map((l) => l.auxiliar_coeficiente ?? null)],
+  );
+}
+
+type TabelaDoItem = { id: string; fonte: Fonte; mes: string; regime: Regime };
+
+/**
+ * Base de preços de um item novo: a do orçamento ou outra liberada (SINAPI, SICRO, SCO-Rio), que passa
+ * a constar entre as bases do orçamento.
+ */
+async function tabelaDoItem(c: PoolClient, o: Cabecalho, tabelaId: string | null | undefined): Promise<TabelaDoItem> {
+  const id = tabelaId || o.tabelaId;
+  if (!uuid(id)) throw new ErroDeRegra("Base de preços não encontrada.");
+  const t = (await c.query("select id, fonte, to_char(mes, 'YYYY-MM') as mes, regime, situacao, uf from tabela_preco where id = $1", [id])).rows[0];
+  if (!t) throw new ErroDeRegra("Base de preços não encontrada.");
+  if (t.situacao !== "liberada") throw new ErroDeRegra("Base de preços não liberada.");
+  if (id !== o.tabelaId) {
+    if (t.uf !== o.uf) throw new ErroDeRegra("A base de preços precisa ser da mesma UF do orçamento.");
+    await c.query("update orcamento set tabelas_extras = array_append(tabelas_extras, $2) where id = $1 and not ($2 = any(tabelas_extras))", [o.id, id]);
+  }
+  return t;
+}
+
+export type NovoItemBase = {
+  etapaId: string; quantidade: string; memoria?: string | null; tipoBdi?: "obra" | "fornecimento";
+  /** Base do item; sem ela, a do orçamento. */
+  tabelaId?: string | null;
+  /** Assunto em que o serviço foi escolhido (orçamento por assunto). */
+  assuntoId?: string | null;
+};
 
 /** Por serviço: a composição entra com material, mão de obra e equipamento, congelados na data-base. */
 export async function adicionarComposicao(a: Ator, orcamentoId: string, composicaoId: string, d: NovoItemBase): Promise<string> {
@@ -312,15 +467,20 @@ export async function adicionarComposicao(a: Ator, orcamentoId: string, composic
     const o = await emRascunho(c, a, orcamentoId);
     await etapaDoOrcamento(c, orcamentoId, d.etapaId);
     if (!uuid(composicaoId)) throw new ErroDeRegra("Composição não encontrada.");
-    const k = (await c.query("select id, fonte, codigo, descricao, unidade, aprovada from composicao where id = $1", [composicaoId])).rows[0];
+    const k = (await c.query(
+      `select k.id, k.fonte, k.codigo, k.descricao, k.unidade, k.aprovada, k.assunto_id,
+              nullif(case when cl.codigo = cl.nome then cl.nome else concat_ws(' ', cl.codigo, cl.nome) end, '') as classificacao
+         from composicao k left join classificacao cl on cl.id = k.classificacao_id where k.id = $1`, [composicaoId])).rows[0];
     if (!k) throw new ErroDeRegra("Composição não encontrada.");
-    if (k.fonte !== o.fonte && k.fonte !== "propria") throw new ErroDeRegra("A composição não é da base de preços deste orçamento.");
+    const t = await tabelaDoItem(c, o, k.fonte === "propria" ? o.tabelaId : d.tabelaId);
+    if (k.fonte !== t.fonte && k.fonte !== "propria") throw new ErroDeRegra("A composição não é da base de preços escolhida.");
     if (!k.aprovada) throw new ErroDeRegra("A composição própria ainda não foi aprovada.");
-    const linhas = await linhasDaComposicao(c, composicaoId, o.tabelaId);
+    const linhas = await linhasDaComposicao(c, composicaoId, t.id);
     if (!linhas.length) throw new ErroDeRegra("A composição não tem insumos.");
     return inserirItem(c, a, o, d.etapaId, {
       modo: "servico", fonte: k.fonte, codigo: k.codigo, descricao: k.descricao, unidade: k.unidade, quantidade: quantidade(d.quantidade),
-      tipoBdi: d.tipoBdi, memoria: d.memoria, composicaoId,
+      tipoBdi: d.tipoBdi, memoria: d.memoria, composicaoId, tabelaId: t.id,
+      assuntoId: d.assuntoId ?? k.assunto_id ?? null, classificacao: k.classificacao ?? null,
     }, linhas);
   });
 }
@@ -331,15 +491,16 @@ export async function adicionarInsumo(a: Ator, orcamentoId: string, insumoId: st
     const o = await emRascunho(c, a, orcamentoId);
     await etapaDoOrcamento(c, orcamentoId, d.etapaId);
     if (!uuid(insumoId)) throw new ErroDeRegra("Insumo não encontrado.");
+    const t = await tabelaDoItem(c, o, d.tabelaId);
     const i = (await c.query(
       `select i.fonte, i.codigo, i.descricao, i.unidade, i.tipo, p.preco::text as preco
-         from insumo i left join preco_insumo p on p.insumo_id = i.id and p.tabela_id = $2 where i.id = $1`, [insumoId, o.tabelaId])).rows[0];
+         from insumo i left join preco_insumo p on p.insumo_id = i.id and p.tabela_id = $2 where i.id = $1`, [insumoId, t.id])).rows[0];
     if (!i) throw new ErroDeRegra("Insumo não encontrado.");
-    if (i.fonte !== o.fonte) throw new ErroDeRegra("O insumo não é da base de preços deste orçamento.");
+    if (i.fonte !== t.fonte) throw new ErroDeRegra("O insumo não é da base de preços escolhida.");
     return inserirItem(c, a, o, d.etapaId, {
       modo: "material", fonte: i.fonte, codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, quantidade: quantidade(d.quantidade),
-      tipoBdi: d.tipoBdi ?? "obra", memoria: d.memoria, insumoId,
-    }, [{ codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, tipo: i.tipo, coeficiente: "1.0000000", preco: i.preco }]);
+      tipoBdi: d.tipoBdi ?? "obra", memoria: d.memoria, insumoId, tabelaId: t.id, assuntoId: d.assuntoId ?? null,
+    }, [{ codigo: i.codigo, descricao: i.descricao, unidade: i.unidade, tipo: i.tipo, coeficiente: "1.0000000", preco: i.preco, fonte: i.fonte, ordem: 0 }]);
   });
 }
 
@@ -366,6 +527,15 @@ async function itemDoOrcamento(c: PoolClient, orcamentoId: string, itemId: strin
   const r = await c.query("select * from orcamento_item where id = $1 and orcamento_id = $2", [itemId, orcamentoId]);
   if (!r.rows[0]) throw new ErroDeRegra("Item não encontrado.");
   return r.rows[0];
+}
+
+/** Só a quantidade (edição na própria linha da revisão); memória e BDI ficam como estão. */
+export async function alterarQuantidade(a: Ator, orcamentoId: string, itemId: string, q: string) {
+  await comContexto(ctx(a), async (c) => {
+    await emRascunho(c, a, orcamentoId);
+    await itemDoOrcamento(c, orcamentoId, itemId);
+    await c.query("update orcamento_item set quantidade = $2 where id = $1", [itemId, quantidade(q)]);
+  });
 }
 
 export async function editarItem(a: Ator, orcamentoId: string, itemId: string, d: { quantidade: string; memoria?: string | null; tipoBdi?: "obra" | "fornecimento" }) {
@@ -441,7 +611,9 @@ export async function insumosDoItem(a: Ator, orcamentoId: string, itemId: string
     await cabecalho(c, a, orcamentoId);
     await itemDoOrcamento(c, orcamentoId, itemId);
     const r = await c.query(
-      `select id, codigo, descricao, unidade, tipo, coeficiente::text, preco::text from orcamento_item_insumo where item_id = $1 order by tipo, descricao`, [itemId]);
+      `select id, codigo, descricao, unidade, tipo, coeficiente::text, preco::text, fonte, ordem, auxiliar_codigo as "auxiliarCodigo",
+              auxiliar_descricao as "auxiliarDescricao", auxiliar_unidade as "auxiliarUnidade", auxiliar_coeficiente::text as "auxiliarCoeficiente"
+         from orcamento_item_insumo where item_id = $1 order by ordem nulls last, tipo, descricao`, [itemId]);
     return r.rows;
   });
 }
@@ -452,9 +624,11 @@ export async function insumosDoOrcamento(a: Ator, orcamentoId: string): Promise<
   return comContexto(ctx(a), async (c) => {
     await cabecalho(c, a, orcamentoId);
     const r = await c.query(
-      `select ii.item_id, ii.id, ii.codigo, ii.descricao, ii.unidade, ii.tipo, ii.coeficiente::text, ii.preco::text
+      `select ii.item_id, ii.id, ii.codigo, ii.descricao, ii.unidade, ii.tipo, ii.coeficiente::text, ii.preco::text, ii.fonte, ii.ordem,
+              ii.auxiliar_codigo as "auxiliarCodigo", ii.auxiliar_descricao as "auxiliarDescricao", ii.auxiliar_unidade as "auxiliarUnidade",
+              ii.auxiliar_coeficiente::text as "auxiliarCoeficiente"
          from orcamento_item_insumo ii join orcamento_item i on i.id = ii.item_id
-        where i.orcamento_id = $1 order by ii.tipo, ii.descricao`, [orcamentoId]);
+        where i.orcamento_id = $1 order by ii.ordem nulls last, ii.tipo, ii.descricao`, [orcamentoId]);
     const m = new Map<string, InsumoDoItem[]>();
     for (const { item_id, ...l } of r.rows) (m.get(item_id) ?? m.set(item_id, []).get(item_id)!).push(l);
     return m;
@@ -468,11 +642,13 @@ async function precificarEm(c: PoolClient, itemId: string, i: { modo: ModoItem; 
   if (i.modo === "servico" && i.composicao_id) return linhasDaComposicao(c, i.composicao_id, tabelaId);
   if (i.modo === "material" && i.insumo_id) {
     const r = await c.query(
-      `select i.codigo, i.descricao, i.unidade, i.tipo, '1.0000000' as coeficiente, p.preco::text as preco
+      `select i.codigo, i.descricao, i.unidade, i.tipo, '1.0000000' as coeficiente, p.preco::text as preco, i.fonte, 0 as ordem
          from insumo i left join preco_insumo p on p.insumo_id = i.id and p.tabela_id = $2 where i.id = $1`, [i.insumo_id, tabelaId]);
     return r.rows as LinhaCongelada[];
   }
-  return (await c.query("select codigo, descricao, unidade, tipo, coeficiente::text, preco::text from orcamento_item_insumo where item_id = $1", [itemId])).rows as LinhaCongelada[];
+  return (await c.query(
+    `select codigo, descricao, unidade, tipo, coeficiente::text, preco::text, fonte, ordem, auxiliar_codigo, auxiliar_descricao,
+            auxiliar_unidade, auxiliar_coeficiente::text from orcamento_item_insumo where item_id = $1`, [itemId])).rows as LinhaCongelada[];
 }
 
 export async function trocarBase(a: Ator, orcamentoId: string, tabelaId: string) {
@@ -481,15 +657,16 @@ export async function trocarBase(a: Ator, orcamentoId: string, tabelaId: string)
     const t = (await c.query("select fonte, uf, mes, regime, situacao, extract(year from mes)::int as ano from tabela_preco where id = $1", [tabelaId])).rows[0];
     if (!t || t.situacao !== "liberada") throw new ErroDeRegra("Base de preços não liberada.");
     if (t.fonte !== o.fonte) throw new ErroDeRegra("A nova base precisa ser da mesma fonte.");
-    const itens = (await c.query("select id, modo, composicao_id, insumo_id from orcamento_item where orcamento_id = $1", [orcamentoId])).rows;
+    // Itens de outra base (ex.: SCO-Rio num orçamento SINAPI) continuam na base em que foram lançados.
+    const itens = (await c.query(
+      "select id, modo, composicao_id, insumo_id from orcamento_item where orcamento_id = $1 and (tabela_id is null or tabela_id = $2)",
+      [orcamentoId, o.tabelaId])).rows;
     for (const i of itens) {
       if (i.modo === "cotacao") continue;
       const linhas = await precificarEm(c, i.id, i, tabelaId);
       await c.query("delete from orcamento_item_insumo where item_id = $1", [i.id]);
-      await c.query(
-        `insert into orcamento_item_insumo (orgao_id, item_id, codigo, descricao, unidade, tipo, coeficiente, preco)
-         select $1, $2, * from unnest($3::text[], $4::text[], $5::text[], $6::tipo_insumo[], $7::numeric[], $8::numeric[])`,
-        [a.orgaoId, i.id, linhas.map((l) => l.codigo), linhas.map((l) => l.descricao), linhas.map((l) => l.unidade), linhas.map((l) => l.tipo), linhas.map((l) => l.coeficiente), linhas.map((l) => l.preco)]);
+      await gravarLinhas(c, a.orgaoId, i.id, linhas);
+      await c.query("update orcamento_item set tabela_id = $2 where id = $1", [i.id, tabelaId]);
     }
     const cprb = t.regime === "desonerado" ? cprbDoAno(t.ano) : "0.00";
     await c.query(
@@ -510,7 +687,7 @@ export async function compararRegimes(a: Ator, orcamentoId: string) {
         where t.fonte = b.fonte and t.uf = b.uf and t.mes = b.mes and t.regime <> b.regime and t.situacao = 'liberada'
           and t.orgao_id is not distinct from b.orgao_id`, [o.tabelaId])).rows[0];
     if (!outra) return null;
-    const itens = (await c.query("select id, modo, composicao_id, insumo_id, quantidade::text, custo_unitario::text, tipo_bdi from orcamento_item where orcamento_id = $1", [orcamentoId])).rows;
+    const itens = (await c.query("select id, modo, composicao_id, insumo_id, tabela_id, quantidade::text, custo_unitario::text, tipo_bdi from orcamento_item where orcamento_id = $1", [orcamentoId])).rows;
     const bdiAtual = { obra: calcularBdi(o.bdiObra), fornecimento: calcularBdi(o.bdiFornecimento) };
     const cprb = outra.regime === "desonerado" ? cprbDoAno(outra.ano) : "0.00";
     const bdiOutro = { obra: calcularBdi({ ...o.bdiObra, cprb }), fornecimento: calcularBdi({ ...o.bdiFornecimento, cprb }) };
@@ -518,7 +695,11 @@ export async function compararRegimes(a: Ator, orcamentoId: string) {
     for (const i of itens) {
       const q = dec(i.quantidade);
       atual += calcularItem({ quantidade: q, custoUnitario: i.custo_unitario == null ? null : dec(i.custo_unitario), material: ZERO, maoDeObra: ZERO, equipamento: ZERO, tipoBdi: i.tipo_bdi }, bdiAtual, o.arredondamento).total;
-      const cu = custoDasLinhas(await precificarEm(c, i.id, i, outra.id), o.arredondamento);
+      // Item de outra base (SICRO ou SCO-Rio num orçamento SINAPI, por exemplo) fica com o custo que tem.
+      const daOutraBase = i.tabela_id && i.tabela_id !== o.tabelaId;
+      const cu = daOutraBase
+        ? custoDasLinhas(await precificarEm(c, i.id, { ...i, modo: "cotacao" }, outra.id), o.arredondamento)
+        : custoDasLinhas(await precificarEm(c, i.id, i, outra.id), o.arredondamento);
       if (cu.semPreco) semPrecoOutro++;
       outro += calcularItem({ quantidade: q, custoUnitario: cu.semPreco ? null : cu.total, material: ZERO, maoDeObra: ZERO, equipamento: ZERO, tipoBdi: i.tipo_bdi }, bdiOutro, o.arredondamento).total;
     }
@@ -573,10 +754,17 @@ async function montar(c: PoolClient, o: Cabecalho): Promise<OrcamentoCompleto> {
   // Em sequência: uma conexão do pg executa uma consulta por vez.
   const etapasR = await c.query("select id, ordem, nome from orcamento_etapa where orcamento_id = $1 order by ordem", [o.id]);
   const itensR = await c.query(
-      `select id, etapa_id as "etapaId", ordem, modo, fonte, codigo, descricao, unidade, quantidade::text, custo_unitario::text as "custoUnitario",
-              coalesce(custo_material, 0)::text as material, coalesce(custo_mao_obra, 0)::text as "maoDeObra", coalesce(custo_equipamento, 0)::text as equipamento,
-              tipo_bdi as "tipoBdi", memoria, criterio_cotacao as "criterioCotacao", justificativa, composicao_id as "composicaoId", insumo_id as "insumoId"
-         from orcamento_item where orcamento_id = $1 order by ordem`, [o.id]);
+      `select i.id, i.etapa_id as "etapaId", i.ordem, i.modo, i.fonte, i.codigo, i.descricao, i.unidade, i.quantidade::text, i.custo_unitario::text as "custoUnitario",
+              coalesce(i.custo_material, 0)::text as material, coalesce(i.custo_mao_obra, 0)::text as "maoDeObra", coalesce(i.custo_equipamento, 0)::text as equipamento,
+              i.tipo_bdi as "tipoBdi", i.memoria, i.criterio_cotacao as "criterioCotacao", i.justificativa, i.composicao_id as "composicaoId", i.insumo_id as "insumoId",
+              i.tabela_id as "tabelaId", to_char(t.mes, 'YYYY-MM') as "baseMes", t.regime as "baseRegime", i.assunto_id as "assuntoId", i.classificacao
+         from orcamento_item i left join tabela_preco t on t.id = i.tabela_id where i.orcamento_id = $1 order by i.ordem`, [o.id]);
+  const basesR = await c.query(
+      `select t.id as "tabelaId", t.fonte, to_char(t.mes, 'YYYY-MM') as mes, t.regime, t.id = o.tabela_id as principal,
+              (select count(*)::int from orcamento_item i where i.orcamento_id = o.id and i.tabela_id = t.id) as itens
+         from orcamento o join tabela_preco t on t.id = o.tabela_id or t.id = any(o.tabelas_extras)
+        where o.id = $1 order by (t.id = o.tabela_id) desc, t.fonte`, [o.id]);
+  const modoR = await c.query("select modo_montagem from orcamento where id = $1", [o.id]);
   const cotR = await c.query(
       `select c.id, c.item_id, c.fornecedor, c.cnpj, to_char(c.data, 'YYYY-MM-DD') as data, c.valor::text as valor, to_char(c.validade, 'YYYY-MM-DD') as validade
          from cotacao c join orcamento_item i on i.id = c.item_id where i.orcamento_id = $1 order by c.data, c.fornecedor`, [o.id]);
@@ -622,7 +810,7 @@ async function montar(c: PoolClient, o: Cabecalho): Promise<OrcamentoCompleto> {
   if (!o.responsavelTecnico?.trim()) pendencias.push("Responsável técnico não informado.");
 
   return {
-    ...o, etapas, totais: comoTexto(geral), bdiObraPct: texto(bdi.obra), bdiFornecimentoPct: texto(bdi.fornecimento),
+    ...o, etapas, bases: basesR.rows, modoMontagem: modoR.rows[0]?.modo_montagem ?? null, totais: comoTexto(geral), bdiObraPct: texto(bdi.obra), bdiFornecimentoPct: texto(bdi.fornecimento),
     avisosBdi: conferirBdi(o.bdiObra, o.tipoObraBdi), pendencias, semPreco,
   };
 }
@@ -746,9 +934,10 @@ export async function novaVersao(a: Ator, id: string): Promise<string> {
     const novo = (await c.query(
       `insert into orcamento (orgao_id, obra_id, numero, versao, versao_anterior_id, nome, tabela_id, fonte, uf, mes, regime, arredondamento,
                               tipo_obra_bdi, bdi_obra, bdi_fornecimento, encargos_horista, encargos_mensalista, responsavel_tecnico,
-                              registro_profissional, art, periodos, unidade_periodo, inicio)
+                              registro_profissional, art, periodos, unidade_periodo, inicio, tabelas_extras, modo_montagem)
        select orgao_id, obra_id, numero, $2, id, nome, tabela_id, fonte, uf, mes, regime, arredondamento, tipo_obra_bdi, bdi_obra, bdi_fornecimento,
-              encargos_horista, encargos_mensalista, responsavel_tecnico, registro_profissional, art, periodos, unidade_periodo, inicio
+              encargos_horista, encargos_mensalista, responsavel_tecnico, registro_profissional, art, periodos, unidade_periodo, inicio,
+              tabelas_extras, modo_montagem
          from orcamento where id = $1 returning id`, [id, versao])).rows[0].id as string;
     const etapas = (await c.query("select id, ordem, nome from orcamento_etapa where orcamento_id = $1", [id])).rows;
     for (const e of etapas) {
@@ -760,13 +949,16 @@ export async function novaVersao(a: Ator, id: string): Promise<string> {
       for (const i of itens) {
         const ni = (await c.query(
           `insert into orcamento_item (orgao_id, orcamento_id, etapa_id, ordem, modo, fonte, codigo, descricao, unidade, quantidade, custo_unitario,
-                                       custo_material, custo_mao_obra, custo_equipamento, tipo_bdi, memoria, criterio_cotacao, justificativa, composicao_id, insumo_id)
+                                       custo_material, custo_mao_obra, custo_equipamento, tipo_bdi, memoria, criterio_cotacao, justificativa, composicao_id, insumo_id,
+                                       tabela_id, assunto_id, classificacao)
            select orgao_id, $2, $3, ordem, modo, fonte, codigo, descricao, unidade, quantidade, custo_unitario, custo_material, custo_mao_obra,
-                  custo_equipamento, tipo_bdi, memoria, criterio_cotacao, justificativa, composicao_id, insumo_id
+                  custo_equipamento, tipo_bdi, memoria, criterio_cotacao, justificativa, composicao_id, insumo_id, tabela_id, assunto_id, classificacao
              from orcamento_item where id = $1 returning id`, [i.id, novo, ne])).rows[0].id;
         await c.query(
-          `insert into orcamento_item_insumo (orgao_id, item_id, codigo, descricao, unidade, tipo, coeficiente, preco)
-           select orgao_id, $2, codigo, descricao, unidade, tipo, coeficiente, preco from orcamento_item_insumo where item_id = $1`, [i.id, ni]);
+          `insert into orcamento_item_insumo (orgao_id, item_id, codigo, descricao, unidade, tipo, coeficiente, preco,
+                                              fonte, ordem, auxiliar_codigo, auxiliar_descricao, auxiliar_unidade, auxiliar_coeficiente)
+           select orgao_id, $2, codigo, descricao, unidade, tipo, coeficiente, preco,
+                  fonte, ordem, auxiliar_codigo, auxiliar_descricao, auxiliar_unidade, auxiliar_coeficiente from orcamento_item_insumo where item_id = $1`, [i.id, ni]);
         await c.query(
           `insert into cotacao (orgao_id, item_id, fornecedor, cnpj, data, valor, validade, anexo)
            select orgao_id, $2, fornecedor, cnpj, data, valor, validade, anexo from cotacao where item_id = $1`, [i.id, ni]);

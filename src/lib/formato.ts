@@ -84,3 +84,27 @@ export function unidadeMedida(u: string | null | undefined): string {
   const convertidas = partes.map((p, i) => (i % 2 ? (p === "/" ? "/" : "×") : SIMBOLO_UNIDADE[p.toUpperCase()]));
   return convertidas.every(Boolean) ? convertidas.join("") : t;
 }
+
+/** Encurta um texto longo e marca o corte com reticências. */
+export const resumir = (t: string | null | undefined, n: number) => { const v = t ?? ""; return v.length > n ? `${v.slice(0, n).trimEnd()}…` : v; };
+
+const SIGLAS: Record<string, string> = {
+  mpa: "MPa", kpa: "kPa", kn: "kN", kv: "kV", kva: "kVA", kw: "kW", pvc: "PVC", pead: "PEAD", cpvc: "CPVC", ppr: "PPR", dn: "DN",
+  ca: "CA", cp: "CP", fck: "fck", led: "LED", spda: "SPDA", gln: "GLN", ac: "AC", pp: "PP", eps: "EPS", osb: "OSB", mdf: "MDF",
+  m2: "m²", m3: "m³", cbuq: "CBUQ", pmf: "PMF", tsd: "TSD", tss: "TSS", rr: "RR", cm30: "CM-30", ii: "II", iii: "III", iv: "IV",
+  rj: "RJ", abnt: "ABNT", nbr: "NBR", sinapi: "SINAPI", sicro: "SICRO", dnit: "DNIT", epi: "EPI", epc: "EPC", art: "ART",
+};
+
+/**
+ * Descrição oficial (em maiúsculas nas bases) em letra normal, para leitura: sem o sufixo de
+ * aferição (AF_mm/aaaa) e com siglas e unidades conhecidas preservadas. A descrição original
+ * continua nas fichas e nas planilhas.
+ */
+export function nomeLegivel(descricao: string | null | undefined): string {
+  const d = (descricao ?? "").replace(/\s*\.?\s*AF_\d{2}\/\d{4}(_[A-Z]+)?\s*\.?\s*$/i, "").trim().replace(/[.;]\s*$/, "");
+  if (!d) return "";
+  // Só converte o que está todo em maiúsculas (SINAPI, SICRO); o SCO-Rio já vem em letra normal.
+  if (d !== d.toUpperCase()) return d.charAt(0).toUpperCase() + d.slice(1);
+  const minus = d.toLowerCase().replace(/[a-zà-ú0-9]+/gi, (p) => SIGLAS[p] ?? p).replace(/\*(\d+)\*/g, "$1").replace(/(\d)x(?=\d)/g, "$1×");
+  return minus.charAt(0).toUpperCase() + minus.slice(1);
+}

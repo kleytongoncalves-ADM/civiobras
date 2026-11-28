@@ -1,3 +1,4 @@
+import { resumir } from "@/lib/formato";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -39,7 +40,7 @@ export default async function NovaInspecao({ params, searchParams }: { params: P
           {m.area === "qualidade" && (
             <div className="campo c12"><label htmlFor="in-i">Item da planilha</label>
               <select id="in-i" name="itemServicoId" className="entrada-texto" defaultValue=""><option value="">Sem item</option>
-                {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 80)}</option>)}</select></div>
+                {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 80)}</option>)}</select></div>
           )}
         </section>
         <section className="cartao">

@@ -46,3 +46,4 @@ next-env.d.ts
 # motor do IFC, copiado de node_modules no build
 /public/web-ifc/
 .arquivos/
+.cache-sco

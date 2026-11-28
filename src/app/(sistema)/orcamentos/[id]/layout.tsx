@@ -3,7 +3,8 @@ import { EtiquetaOrcamento } from "@/componentes/EtiquetaOrcamento";
 import { mesAno, moeda, percentual } from "@/lib/formato";
 import { rotuloOrcamento } from "@/servicos/orcamentos";
 import { ROTULO_FONTE, ROTULO_REGIME } from "@/servicos/precos";
-import { AbasOrcamento } from "./AbasOrcamento";
+import { Suspense } from "react";
+import { AbasOrcamento, PassosOrcamento } from "./AbasOrcamento";
 import { carregarOrcamento } from "./carregar";
 
 export default async function LayoutOrcamento({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
@@ -24,7 +25,7 @@ export default async function LayoutOrcamento({ children, params }: { children: 
           <p className="subtitulo" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
             <EtiquetaOrcamento situacao={o.situacao} />
             <span>{o.obraNome}</span>
-            <span>· {ROTULO_FONTE[o.fonte]} {o.uf} {mesAno(o.mes)} · {ROTULO_REGIME[o.regime]} · {o.arredondamento === "truncar" ? "Trunca" : "Arredonda"} em 2 casas</span>
+            <span>· {o.bases.map((b) => `${ROTULO_FONTE[b.fonte]} ${mesAno(b.mes)}`).join(" + ")} · {o.uf} · {ROTULO_REGIME[o.regime]} · {o.arredondamento === "truncar" ? "Trunca" : "Arredonda"} em 2 casas</span>
           </p>
         </div>
       </div>
@@ -48,6 +49,11 @@ export default async function LayoutOrcamento({ children, params }: { children: 
         </div>
       </div>
 
+      {o.situacao === "rascunho" && (
+        <Suspense fallback={null}>
+          <PassosOrcamento id={id} feitos={[true, !!o.modoMontagem, o.etapas.some((e) => e.itens.length > 0), o.pendencias.length === 0, false]} />
+        </Suspense>
+      )}
       <AbasOrcamento id={id} />
       {children}
     </>

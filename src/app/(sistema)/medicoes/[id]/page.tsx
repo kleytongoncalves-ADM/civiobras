@@ -6,7 +6,7 @@ import { EtiquetaMedicao, EtiquetaPagamento } from "@/componentes/Etiquetas";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
 import { Galeria } from "@/componentes/Fotos";
 import { ErroDeRegra } from "@/lib/db";
-import { dataCurta, dataHora, moeda, paraCampo, percentual, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataCurta, dataHora, moeda, paraCampo, percentual, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { comoAtor, exigirUsuario } from "@/lib/sessao";
 import { rotuloContrato } from "@/servicos/contratos";
 import {
@@ -242,7 +242,7 @@ export default async function FichaMedicao({ params }: { params: Promise<{ id: s
                 <div className="campo c8"><label htmlFor="g-item">Item</label>
                   <select id="g-item" name="itemServicoId" className="entrada-texto" defaultValue="">
                     <option value="">Medição inteira</option>
-                    {medidos.map((l) => <option key={l.itemServicoId} value={l.itemServicoId}>{l.numero} · {l.descricao.slice(0, 60)}</option>)}
+                    {medidos.map((l) => <option key={l.itemServicoId} value={l.itemServicoId}>{l.numero} · {resumir(l.descricao, 60)}</option>)}
                   </select>
                 </div>
                 <div className="c4 rodape-form"><BotaoEnviar className="botao botao-neutro" enviando="…"><Plus /> Glosar</BotaoEnviar></div>

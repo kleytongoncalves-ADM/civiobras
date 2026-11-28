@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Clock, FileSpreadsheet, FileText, LogOut, Truck, UserPlus } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
-import { dataCurta, moeda, numero, unidadeMedida } from "@/lib/formato";
+import { dataCurta, moeda, numero, unidadeMedida, resumir } from "@/lib/formato";
 import { painelEquipes } from "@/servicos/equipes";
 import { pode } from "@/servicos/permissoes";
 import { acaoAlocarEquipamento, acaoAlocarPessoa, acaoApontarEquipamento, acaoApontarHoras, acaoEncerrarAlocacao } from "../../../equipes/acoes";
@@ -89,7 +89,7 @@ export default async function EquipesDaObra({ params }: { params: Promise<{ id: 
               <div className="campo c9"><label htmlFor="ap-i">Item de serviço</label>
                 <select id="ap-i" name="itemServicoId" className="entrada-texto" defaultValue="">
                   <option value="">Sem item (administração local)</option>
-                  {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 80)}</option>)}
+                  {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 80)}</option>)}
                 </select></div>
               <div className="c12 tabela-caixa"><table className="tabela tabela-compacta">
                 <thead><tr><th>Pessoa</th><th>Função</th><th className="dir">Horas normais</th><th className="dir">Horas extras</th></tr></thead>
@@ -153,7 +153,7 @@ export default async function EquipesDaObra({ params }: { params: Promise<{ id: 
                 <div className="campo c8"><label htmlFor="ah-i">Item de serviço</label>
                   <select id="ah-i" name="itemServicoId" className="entrada-texto" defaultValue="">
                     <option value="">Sem item</option>
-                    {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 60)}</option>)}
+                    {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 60)}</option>)}
                   </select></div>
                 <div className="c12 rodape-form"><BotaoEnviar className="botao botao-neutro" enviando="Apontando…"><Clock /> Apontar</BotaoEnviar></div>
               </FormAcao>
@@ -168,7 +168,7 @@ export default async function EquipesDaObra({ params }: { params: Promise<{ id: 
               <thead><tr><th>Item</th><th className="dir">Medido</th><th className="dir">Material</th><th className="dir">Mão de obra</th><th className="dir">Equipamento</th><th className="dir">Realizado</th><th className="dir">Horas por unidade</th><th className="dir">Previsto na composição</th></tr></thead>
               <tbody>{p.custos.map((l) => (
                 <tr key={l.itemId}>
-                  <td style={{ minWidth: 220 }}><b className="num">{l.numero}</b> {l.descricao.slice(0, 60)}<div className="fraco">{numero(l.quantidadeMedida, 2)} {unidadeMedida(l.unidade)} medidos</div></td>
+                  <td style={{ minWidth: 220 }}><b className="num">{l.numero}</b> {resumir(l.descricao, 60)}<div className="fraco">{numero(l.quantidadeMedida, 2)} {unidadeMedida(l.unidade)} medidos</div></td>
                   <td className="dir num">{moeda(l.medido)}</td>
                   <td className="dir num">{moeda(l.materiais)}</td>
                   <td className="dir num">{moeda(l.maoDeObra)}</td>

@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Box, Boxes, Building2, ChevronLeft, ChevronRight, Coins, Download, Eraser, Focus, Hammer, LocateFixed, Map as IconePlanta, Maximize, Maximize2, Minimize, Minus, Plus, Ruler, Table2, Tags } from "lucide-react";
+import { ArrowLeft, Box, Boxes, Building2, ChevronLeft, ChevronRight, Coins, Download, Eraser, Focus, Hammer, LocateFixed, Map as IconePlanta, Maximize, Maximize2, Minimize, Minus, Plus, Ruler, SlidersHorizontal, Table2, Tags } from "lucide-react";
 import type { CenaItem, Deposito, Peca } from "@/servicos/cena-3d";
 import type { Apontado, Filtro, GrupoProjeto, Medida, Motor, Vista } from "./motor";
 import type { ProjetoIfc } from "@/servicos/ifc";
-import { unidadeMedida } from "@/lib/formato";
+import { unidadeMedida, resumir } from "@/lib/formato";
 import { EVENTO_LOCALIZAR } from "./Localizar3D";
 import { papelNaObra, type MedidaItem, type Obra } from "@/servicos/obra-3d";
 import { acaoMedidas3d } from "@/app/(sistema)/orcamentos/acoes";
@@ -72,6 +72,10 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
   const [falhou, setFalhou] = useState(false);
   const [selecionado, setSelecionado] = useState<string | null>(() => focoInicial ?? cena.at(-1)?.itemId ?? null);
   const [focado, setFocado] = useState(!!focoInicial);
+  /** Canteiro: item aberto sozinho na cena, com os materiais, a equipe e os equipamentos dele. */
+  const [aberto, setAberto] = useState<string | null>(null);
+  /** Ferramentas menos usadas (medir, custo, etiquetas, imagem, filtros) ficam recolhidas. */
+  const [mais, setMais] = useState(false);
   const vistos = useRef<Set<string> | null>(null);
   const pendentes = useRef<Set<string>>(new Set());
   const [montado, setMontado] = useState(false);
@@ -94,6 +98,8 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
   }, [noProjeto, projeto, malhas, orcamentoId]);
   /** Fora do canteiro: a obra por medidas ou o projeto IFC ocupam a cena. */
   const naConstrucao = naObra || noProjeto;
+  const naConstrucaoRef = useRef(false);
+  useEffect(() => { naConstrucaoRef.current = naConstrucao; }, [naConstrucao]);
   const [vista, setVista] = useState<Vista>("perspectiva");
   const [filtro, setFiltro] = useState<FiltroTela>("todos");
   const [porCusto, setPorCusto] = useState(false);
@@ -111,6 +117,8 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
   const itemSel = cena.find((i) => i.itemId === selecionado) ?? cena.at(-1) ?? null;
   const indice = itemSel ? cena.indexOf(itemSel) : -1;
   const idSel = itemSel?.itemId ?? null;
+  const emDetalhe = modo === "canteiro" && !naConstrucao && !!aberto && aberto === idSel && (itemSel?.pecas.length ?? 0) > 0;
+  const voltar = () => { setAberto(null); setFocado(false); };
   const comModelo = useMemo(() => cena.filter((i) => i.pecas.length > 0).length, [cena]);
 
   // Itens novos desde a última visita (ou desde a última inclusão): tocam a animação de entrada.
@@ -141,7 +149,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
       if (!vivo || !caixa.current) return;
       if (!mod.suporteWebGL()) { setFalhou(true); return; }
       const escuro = () => document.documentElement.dataset.tema === "escuro";
-      m = new mod.Motor(caixa.current, { escuro: escuro(), animacoes: true, onSelecionar: (id) => { setSelecionado(origem.current[id]?.[0] ?? id); setFocado(true); }, onApontar: setApontado, onMedir: setMedida, onApontarProjeto: setApontadoIfc });
+      m = new mod.Motor(caixa.current, { escuro: escuro(), animacoes: true, onSelecionar: (id) => { const alvo = origem.current[id]?.[0] ?? id; setSelecionado(alvo); setFocado(true); if (modo === "canteiro" && !naConstrucaoRef.current) setAberto(alvo); }, onApontar: setApontado, onMedir: setMedida, onApontarProjeto: setApontadoIfc });
       motor.current = m;
       obs = new IntersectionObserver(([e]) => m?.definirVisivel(e.isIntersecting));
       obs.observe(caixa.current);
@@ -150,7 +158,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
       setPronto(true);
     }).catch(() => setFalhou(true));
     return () => { vivo = false; obs?.disconnect(); tema?.disconnect(); m?.destruir(); motor.current = null; };
-  }, []);
+  }, [modo]);
 
   // Atualiza a cena quando os itens, o item escolhido ou a vista mudam.
   useEffect(() => {
@@ -165,6 +173,10 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
       const it = cena.find((i) => i.itemId === idSel);
       const animar = new Set(it && pendentes.current.delete(it.itemId) ? [it.itemId] : []);
       void m.definirCena(it ? [it] : [], "item", { animar, montado });
+    } else if (emDetalhe) {
+      // Um serviço por vez: só o que ele usa, agrupado em um espaço pequeno.
+      const it = cena.find((i) => i.itemId === idSel);
+      void m.definirCena(it ? [it] : [], "item", { animar: new Set(), montado: false });
     } else if (deposito && !montado) {
       // Depósito: anima as entradas dos itens novos; nas que já existiam, só caem as peças acrescentadas.
       const animar = new Set(deposito.entradas.map((e) => e.itemId).filter((id) => deposito.origem[id]?.some((i) => pendentes.current.has(i))));
@@ -175,7 +187,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
       const animar = new Set(cena.map((i) => i.itemId).filter((id) => pendentes.current.delete(id)));
       void m.definirCena(cena, "canteiro", { foco: focado ? idSel : null, animar, montado: true });
     }
-  }, [pronto, cena, deposito, idSel, modo, focado, montado, naObra, obra, noProjeto, gruposDoProjeto]);
+  }, [pronto, cena, deposito, idSel, modo, focado, montado, naObra, obra, noProjeto, gruposDoProjeto, emDetalhe]);
 
   // O que está na cena agora: entradas do depósito ou os itens do orçamento.
   const naCena = useMemo(() => (modo === "canteiro" && deposito && !montado && !naConstrucao ? deposito.entradas : cena), [modo, deposito, montado, cena, naConstrucao]);
@@ -186,6 +198,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
     const m = motor.current;
     if (!pronto || !m || modo !== "canteiro") return;
     let f: Filtro = null;
+    if (emDetalhe) { m.destacar(null); m.verCusto(false); return; }
     if (filtro === "selecionado" && idSel) {
       const ids = new Set(naCena.filter((e) => e.itemId === idSel || deposito?.origem[e.itemId]?.includes(idSel)).map((e) => e.itemId));
       f = (id) => ids.has(id);
@@ -199,7 +212,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
     } else if (filtro !== "todos" && filtro !== "selecionado") f = (_id, papel) => papel === filtro;
     m.destacar(f);
     m.verCusto(porCusto);
-  }, [pronto, modo, filtro, porCusto, naCena, idSel, deposito]);
+  }, [pronto, modo, filtro, porCusto, naCena, idSel, deposito, emDetalhe]);
 
   useEffect(() => { motor.current?.etiquetas(etiquetas); }, [pronto, etiquetas]);
   useEffect(() => { motor.current?.medir(medindo); }, [pronto, medindo]);
@@ -301,7 +314,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
             <dl>
               <div><dt>Elementos</dt><dd className="num">{g.elementos}</dd></div>
               {medidasG.map(([nome, v, un]) => <div key={nome}><dt>{nome}</dt><dd className="num">{num(Number(v))} {unidadeMedida(un)}</dd></div>)}
-              {itens.map((i) => <div key={i.itemId}><dt>Item {i.numero}</dt><dd>{i.descricao.length > 34 ? `${i.descricao.slice(0, 34)}…` : i.descricao}</dd></div>)}
+              {itens.map((i) => <div key={i.itemId}><dt>Item {i.numero}</dt><dd>{i.descricao.length > 34 ? resumir(i.descricao, 34) : i.descricao}</dd></div>)}
               {itens.length === 0 && <div className="v3d-cartao-total"><dt>Sem item no orçamento</dt><dd /></div>}
             </dl>
           </div>
@@ -329,20 +342,25 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
               <button type="button" className="v3d-botao" onClick={() => motor.current?.zoom(1.35)} title="Afastar" aria-label="Afastar"><Minus /></button>
             </div>
             <div className="v3d-grupo">
+              <button type="button" className="v3d-botao" onClick={telaCheia} title={cheia ? "Sair da tela cheia" : "Tela cheia"} aria-label={cheia ? "Sair da tela cheia" : "Tela cheia"}>{cheia ? <Minimize /> : <Maximize />}</button>
+              <button type="button" className={`v3d-botao ${mais ? "v3d-botao-ativo" : ""}`} onClick={() => { if (mais) { setMedindo(false); setPorCusto(false); setFiltro("todos"); } setMais(!mais); }} aria-pressed={mais} title={mais ? "Menos opções" : "Mais opções"} aria-label={mais ? "Menos opções" : "Mais opções"}><SlidersHorizontal /></button>
+            </div>
+            {mais && <div className="v3d-grupo">
               <button type="button" className={`v3d-botao ${medindo ? "v3d-botao-ativo" : ""}`} onClick={() => setMedindo(!medindo)} aria-pressed={medindo} title="Medir" aria-label="Medir"><Ruler /></button>
               <button type="button" className={`v3d-botao ${porCusto ? "v3d-botao-ativo" : ""}`} onClick={() => setPorCusto(!porCusto)} aria-pressed={porCusto} title="Visualizar por custo" aria-label="Visualizar por custo"><Coins /></button>
               <button type="button" className={`v3d-botao ${etiquetas ? "" : "v3d-botao-ativo"}`} onClick={() => setEtiquetas(!etiquetas)} aria-pressed={!etiquetas} title={etiquetas ? "Ocultar etiquetas" : "Mostrar etiquetas"} aria-label={etiquetas ? "Ocultar etiquetas" : "Mostrar etiquetas"}><Tags /></button>
               <button type="button" className="v3d-botao" onClick={exportar} title="Exportar imagem" aria-label="Exportar imagem"><Download /></button>
-              <button type="button" className="v3d-botao" onClick={telaCheia} title={cheia ? "Sair da tela cheia" : "Tela cheia"} aria-label={cheia ? "Sair da tela cheia" : "Tela cheia"}>{cheia ? <Minimize /> : <Maximize />}</button>
-            </div>
+            </div>}
           </div>
           <div className="v3d-vistas">
+            {emDetalhe && <button type="button" className="v3d-botao v3d-voltar" onClick={voltar}><ArrowLeft /><span>Visão geral</span></button>}
             <div className="v3d-grupo">
               <button type="button" className={`v3d-botao ${vista !== "planta" ? "v3d-botao-ativo" : ""}`} onClick={() => mudarVista("perspectiva")}><Box /><span>Vista 3D</span></button>
               <button type="button" className={`v3d-botao ${vista === "planta" ? "v3d-botao-ativo" : ""}`} onClick={() => mudarVista("planta")}><IconePlanta /><span>Planta</span></button>
             </div>
           </div>
-          <div className="v3d-filtros" role="group" aria-label="Filtros" hidden={medindo}>
+          {!mais && !medindo && <p className="v3d-dica">{emDetalhe ? `Item ${itemSel?.numero}: o que este serviço usa.` : "Clique em um serviço para ver o que ele usa."} Gire com o mouse e ande com W, A, S, D ou as setas.</p>}
+          <div className="v3d-filtros" role="group" aria-label="Filtros" hidden={medindo || !mais || emDetalhe}>
             {FILTROS.filter((f) => (noProjeto ? false : naObra ? !["material", "mao_de_obra", "equipamento", "kit"].includes(f.id) : f.id !== "kit" || (temKit && montado))).map((f) => (
               <button key={f.id} type="button" className={`v3d-filtro ${filtro === f.id ? "v3d-filtro-ativo" : ""}`} onClick={() => setFiltro(f.id)} aria-pressed={filtro === f.id}>{f.nome}</button>
             ))}
@@ -371,11 +389,11 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
           </ul>
         </details>
       )}
-      {modo === "canteiro" && pronto && cena.length > 0 && !naConstrucao && !montado && etiquetas && !medindo && (
+      {modo === "canteiro" && pronto && cena.length > 0 && !naConstrucao && !montado && etiquetas && !medindo && mais && !emDetalhe && (
         <details className="v3d-legenda">
           <summary>Legenda</summary>
           <ul>
-            <li><i className="v3d-leg-mouse" />Mouse: botão esquerdo ou do meio gira, direito arrasta, rolagem aproxima</li>
+            <li><i className="v3d-leg-mouse" />Mouse: botão esquerdo ou do meio gira, direito arrasta, rolagem aproxima. Teclado: W, A, S, D ou setas andam</li>
             <li><i className="v3d-leg-anel" />Anel na base da equipe: horas de trabalho, 24 h por volta</li>
             <li><i className="v3d-leg-a" />Maior peso no custo do orçamento (curva A)</li>
             <li><i className="v3d-leg-b" />Peso intermediário (curva B)</li>
@@ -384,8 +402,8 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
         </details>
       )}
       <div className="v3d-controles">
-        <button type="button" className="v3d-botao" onClick={() => { setFocado(false); motor.current?.centralizar(); }} disabled={!pronto} title="Centralizar obra" aria-label="Centralizar obra"><Focus /></button>
-        {modo === "canteiro" && <button type="button" className="v3d-botao" onClick={() => { if (!idSel) return; const alvo = naCena.find((e) => e.itemId === idSel || deposito?.origem[e.itemId]?.includes(idSel)); if (alvo) motor.current?.focar(alvo.itemId); }} disabled={!pronto || !idSel} title="Centralizar item" aria-label="Centralizar item"><LocateFixed /></button>}
+        <button type="button" className="v3d-botao" onClick={() => { setFocado(false); motor.current?.centralizar(); }} disabled={!pronto} title="Centralizar" aria-label="Centralizar"><Focus /></button>
+        {modo === "canteiro" && mais && !emDetalhe && <button type="button" className="v3d-botao" onClick={() => { if (!idSel) return; const alvo = naCena.find((e) => e.itemId === idSel || deposito?.origem[e.itemId]?.includes(idSel)); if (alvo) motor.current?.focar(alvo.itemId); }} disabled={!pronto || !idSel} title="Centralizar item" aria-label="Centralizar item"><LocateFixed /></button>}
         {modo === "canteiro" && temObra && (
           <button type="button" className={`v3d-botao ${naObra && !noProjeto ? "v3d-botao-ativo" : ""}`} onClick={() => { setVerProjeto(false); setVerObra(noProjeto ? true : !verObra); }} aria-pressed={naObra && !noProjeto} disabled={!pronto}>
             <Building2 /><span>Obra</span>
@@ -396,7 +414,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
             <Boxes /><span>Projeto</span>
           </button>
         )}
-        {temKit && !naConstrucao && (
+        {temKit && !naConstrucao && !emDetalhe && (
           <button type="button" className={`v3d-botao ${montado ? "v3d-botao-ativo" : ""}`} onClick={() => setMontado(!montado)} aria-pressed={montado} disabled={!pronto}>
             <Hammer /><span>Serviço montado</span>
           </button>
@@ -518,7 +536,7 @@ export function Visualizador3D({ orcamentoId, cena, modo, focoInicial, deposito,
         <ol className="v3d-lista">
           {cena.map((i) => (
             <li key={i.itemId}>
-              <button type="button" className={`v3d-lista-item ${i.itemId === idSel ? "v3d-lista-ativo" : ""}`} onClick={() => { setSelecionado(i.itemId); setFocado(true); }}>
+              <button type="button" className={`v3d-lista-item ${i.itemId === idSel ? "v3d-lista-ativo" : ""}`} onClick={() => { setSelecionado(i.itemId); setFocado(true); if (!naConstrucao) setAberto(i.itemId); }}>
                 <span className="num fraco">{i.numero}</span>
                 <span className="v3d-lista-texto">{i.descricao}<i className="v3d-lista-barra" style={{ width: `${maiorCusto > 0 ? (custoDe(i) / maiorCusto) * 100 : 0}%` }} /></span>
                 {i.pecas.length === 0 ? <span className="etiqueta et-neutra">Sem 3D</span> : custoDe(i) > 0 && <span className="num v3d-lista-valor">{moeda(custoDe(i))}</span>}

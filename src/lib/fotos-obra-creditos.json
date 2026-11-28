@@ -1,0 +1,278 @@
+{
+  "tijolo-ceramico": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Alvenaria de blocos cerâmicos"
+  },
+  "modo-assunto": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "ElevenLabs (Seedream 5 Pro)",
+    "titulo": "Casa em fase final de obra"
+  },
+  "modo-livre": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "ElevenLabs (Seedream 5 Pro)",
+    "titulo": "Projeto, capacete e trena"
+  },
+  "bloco-concreto": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Alvenaria de blocos de concreto"
+  },
+  "piso-ceramico": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Assentamento de piso cerâmico"
+  },
+  "reboco": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Chapisco e reboco sobre alvenaria"
+  },
+  "azulejo": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Revestimento cerâmico de parede"
+  },
+  "madeiramento": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Estrutura de madeira do telhado"
+  },
+  "telha-ceramica": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Telhado de telha cerâmica"
+  },
+  "forma": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Formas de madeira e escoramento"
+  },
+  "concreto": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Estrutura de concreto armado"
+  },
+  "fundacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Sapata com armadura e arranque de pilar"
+  },
+  "escavacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Escavação de vala escorada"
+  },
+  "demolicao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Entulho de demolição"
+  },
+  "tapume": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Tapume de obra"
+  },
+  "limpeza": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Caçamba de entulho para limpeza da obra"
+  },
+  "impermeabilizacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Impermeabilização com manta asfáltica"
+  },
+  "pedra": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Muro de pedra argamassada"
+  },
+  "drywall": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Parede de drywall em montagem"
+  },
+  "tubo-pvc": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Tubos e conexões de PVC"
+  },
+  "eletrica": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Eletrodutos, caixas e quadro de distribuição"
+  },
+  "asfalto": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Pavimentação asfáltica"
+  },
+  "sinalizacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Sinalização viária"
+  },
+  "calcada": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Calçada de concreto com meio-fio"
+  },
+  "drenagem": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Rede de drenagem com tubos de concreto"
+  },
+  "janela": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Janela de alumínio de correr"
+  },
+  "pintura": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Pintura de parede com rolo"
+  },
+  "incendio": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Extintor e abrigo de hidrante"
+  },
+  "climatizacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Ar-condicionado split na parede"
+  },
+  "iluminacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Poste de iluminação pública"
+  },
+  "equipamento": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Betoneira no canteiro"
+  },
+  "transporte": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Caminhão basculante carregado"
+  },
+  "ponte": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Ponte de concreto sobre rio"
+  },
+  "administracao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Mesa com projeto e capacete"
+  },
+  "resumo-vazio": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Projeto aberto sobre a mesa"
+  },
+  "contrapiso": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Contrapiso sendo sarrafeado"
+  },
+  "telha-fibrocimento": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Telhado de fibrocimento ondulado"
+  },
+  "bloquete": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Piso intertravado de concreto"
+  },
+  "meio-fio": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Meio-fio e sarjeta de concreto"
+  },
+  "aterro": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Aterro compactado com placa vibratória"
+  },
+  "armacao": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Armadura de aço montada em cavaletes"
+  },
+  "loucas": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Bacia sanitária e lavatório instalados"
+  },
+  "porta": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Porta de madeira instalada"
+  },
+  "forro": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Forro de gesso com spots embutidos"
+  },
+  "verga": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Verga e contraverga de concreto no vão"
+  },
+  "paisagismo": {
+    "autor": "CiviObras",
+    "licenca": "Imagem gerada para o CiviObras",
+    "origem": "Blender (render 3D)",
+    "titulo": "Canteiro com arbustos e gramado"
+  }
+}

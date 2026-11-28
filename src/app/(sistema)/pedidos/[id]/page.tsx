@@ -6,7 +6,7 @@ import { BotaoImprimir } from "@/componentes/BotaoImprimir";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
 import { CabecalhoRelatorio, RodapeRelatorio, Secao } from "@/componentes/relatorio/Estrutura";
 import { ErroDeRegra } from "@/lib/db";
-import { dataCurta, dataHora, moeda, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataCurta, dataHora, moeda, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { comoAtor, exigirUsuario } from "@/lib/sessao";
 import { SemPermissao } from "@/servicos/permissoes";
 import { obterPedido, ROTULO_PEDIDO } from "@/servicos/suprimentos";
@@ -53,7 +53,7 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
                   <thead><tr><th>Material</th><th className="dir">A receber</th><th className="dir">Conferido</th><th className="dir">Recusado</th><th>Motivo da recusa</th></tr></thead>
                   <tbody>{abertos.map((i) => (
                     <tr key={i.id}>
-                      <td>{i.material.slice(0, 50)}<input type="hidden" name="item" value={i.id} /></td>
+                      <td>{resumir(i.material, 50)}<input type="hidden" name="item" value={i.id} /></td>
                       <td className="dir num">{quantidade(i.saldo)} {unidadeMedida(i.unidade)}</td>
                       <td className="dir"><input name={`q_${i.id}`} inputMode="decimal" className="entrada-texto num entrada-curta" defaultValue={String(i.saldo).replace(".", ",")} aria-label={`Conferido de ${i.material}`} /></td>
                       <td className="dir"><input name={`r_${i.id}`} inputMode="decimal" className="entrada-texto num entrada-curta" aria-label={`Recusado de ${i.material}`} /></td>

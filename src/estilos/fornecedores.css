@@ -259,3 +259,9 @@
 .email-grupo .fraco { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
 .email-grupo-nome { display: grid; min-width: 0; line-height: 1.3; }
 .email-grupo .opcao-check { align-items: flex-start; }
+
+/* Textos longos da lista de conversas terminam em reticências, sem parecer cortados. */
+.conversas-lista > li { min-width: 0; }
+.conversa-item { grid-template-columns: minmax(0, 1fr); }
+.conversa-topo b, .conversa-trecho > span { min-width: 0; }
+.conversa-assunto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

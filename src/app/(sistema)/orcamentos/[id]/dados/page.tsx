@@ -7,6 +7,7 @@ import { listarTabelas, ROTULO_FONTE, ROTULO_REGIME } from "@/servicos/precos";
 import { acaoDadosGerais, acaoTrocarBase } from "../../acoes";
 import { carregarOrcamento } from "../carregar";
 import { FormDados } from "./FormDados";
+import { NavPassos } from "../ResumoOrcamento";
 
 export const metadata: Metadata = { title: "BDI e dados do orçamento" };
 
@@ -47,6 +48,7 @@ export default async function Dados({ params }: { params: Promise<{ id: string }
           </FormAcao>
         )}
       </section>
+      {o.situacao === "rascunho" && <NavPassos proximo={`/orcamentos/${id}/montar${o.modoMontagem ? "" : "?escolher=1"}`} rotuloProximo={o.modoMontagem ? "Ir para os serviços" : "Próximo passo"} />}
     </div>
   );
 }

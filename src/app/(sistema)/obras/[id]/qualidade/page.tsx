@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FileSpreadsheet, FileText, FlaskConical } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
-import { dataCurta, numero, unidadeMedida } from "@/lib/formato";
+import { dataCurta, numero, unidadeMedida, resumir } from "@/lib/formato";
 import { pode } from "@/servicos/permissoes";
 import { painelQualidade, rotuloNc, TIPOS_ENSAIO } from "@/servicos/qualidade";
 import { acaoEnsaio } from "../../../qualidade/acoes";
@@ -76,7 +76,7 @@ export default async function QualidadeDaObra({ params }: { params: Promise<{ id
                     <datalist id="tipos-ensaio">{TIPOS_ENSAIO.map((t) => <option key={t.tipo} value={t.tipo} />)}</datalist></div>
                   <div className="campo c6"><label htmlFor="en-i">Item da planilha</label>
                     <select id="en-i" name="itemServicoId" className="entrada-texto" defaultValue=""><option value="">Sem item</option>
-                      {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 60)}</option>)}</select></div>
+                      {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 60)}</option>)}</select></div>
                   <div className="campo c6"><label htmlFor="en-l">Local ou lote</label><input id="en-l" name="local" className="entrada-texto" placeholder="Pilares do térreo, lote 3" /></div>
                   <div className="campo c6"><label htmlFor="en-c">Coleta</label><input id="en-c" name="dataColeta" type="date" max={hoje()} className="entrada-texto" required /></div>
                   <div className="campo c6"><label htmlFor="en-r">Resultado em</label><input id="en-r" name="dataResultado" type="date" max={hoje()} className="entrada-texto" required defaultValue={hoje()} /></div>

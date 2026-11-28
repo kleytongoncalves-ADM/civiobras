@@ -104,6 +104,32 @@ function caixa(o: THREE.Object3D) {
   return new THREE.Box3().setFromObject(o, true);
 }
 
+/** Caixa só do que aparece: malhas visíveis, sem o que está escondido dentro do modelo. */
+/** Mãos da equipe: os dedos vêm abertos e retos do Blender; aqui ganham a curva natural de quem segura a ferramenta. */
+const CURVA_DEDO = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.45);
+function fecharMaos(clip: THREE.AnimationClip) {
+  if (clip.userData?.maosFechadas) return;
+  const q = new THREE.Quaternion();
+  for (const faixa of clip.tracks) {
+    if (!/^finger[2-5]-[123][._]?[LR]\.quaternion$/.test(faixa.name)) continue;
+    const v = faixa.values;
+    for (let i = 0; i < v.length; i += 4) { q.fromArray(v, i).multiply(CURVA_DEDO).toArray(v, i); }
+  }
+  clip.userData = { ...clip.userData, maosFechadas: true };
+}
+
+function caixaVisivel(o: THREE.Object3D) {
+  o.updateMatrixWorld(true);
+  const bb = new THREE.Box3();
+  const visita = (n: THREE.Object3D) => {
+    if (!n.visible) return;
+    if ((n as THREE.Mesh).isMesh) bb.union(new THREE.Box3().setFromObject(n, true));
+    for (const c of n.children) visita(c);
+  };
+  visita(o);
+  return bb.isEmpty() ? caixa(o) : bb;
+}
+
 // ---------------------------------------------------------------------------
 // Almoxarifado: suportes desenhados aqui mesmo (palete, cavalete, estante, baia, vaga)
 // ---------------------------------------------------------------------------
@@ -633,6 +659,9 @@ export class Motor {
   private medida = new THREE.Group();
   private custos = new THREE.Group();
   private porCusto = false;
+  /** Teclas de andar (WASD e setas) que estão apertadas, e se o ponteiro está sobre a cena. */
+  private teclas = new Set<string>();
+  private sobreCena = false;
 
   constructor(private container: HTMLElement, opcoes: Opcoes) {
     this.opcoes = opcoes;
@@ -724,6 +753,11 @@ export class Motor {
 
     this.renderer.domElement.addEventListener("pointerdown", this.aoApertar);
     this.renderer.domElement.addEventListener("pointerup", this.aoSoltar);
+    container.addEventListener("pointerenter", this.aoEntrar);
+    container.addEventListener("pointerleave", this.aoDeixar);
+    window.addEventListener("keydown", this.aoTeclar);
+    window.addEventListener("keyup", this.aoSoltarTecla);
+    window.addEventListener("blur", this.aoDeixar);
     this.observador = new ResizeObserver(() => this.redimensionar());
     this.observador.observe(container);
     this.redimensionar();
@@ -779,6 +813,43 @@ export class Motor {
     return { id: (o?.userData.itemId as string | undefined) ?? null, ordem, ponto: hit?.point ?? null, x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  // Andar pela cena com WASD ou setas, enquanto o ponteiro está sobre ela e ninguém está digitando.
+  private aoEntrar = () => { this.sobreCena = true; };
+  private aoDeixar = () => { this.sobreCena = false; this.teclas.clear(); };
+  private teclaDeAndar(e: KeyboardEvent): string | null {
+    if (e.ctrlKey || e.metaKey || e.altKey) return null;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    return ({ w: "frente", ArrowUp: "frente", s: "tras", ArrowDown: "tras", a: "esquerda", ArrowLeft: "esquerda", d: "direita", ArrowRight: "direita" } as Record<string, string>)[k] ?? null;
+  }
+  private aoTeclar = (e: KeyboardEvent) => {
+    const t = e.target as HTMLElement | null;
+    if (!this.sobreCena || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+    const d = this.teclaDeAndar(e);
+    if (!d) return;
+    e.preventDefault(); // as setas não rolam a página enquanto movem a câmera
+    this.teclas.add(d);
+  };
+  private aoSoltarTecla = (e: KeyboardEvent) => { const d = this.teclaDeAndar(e); if (d) this.teclas.delete(d); };
+  private andar(dt: number) {
+    if (!this.teclas.size) return;
+    const frente = new THREE.Vector3().subVectors(this.controles.target, this.camera.position);
+    const dist = frente.length();
+    frente.y = 0;
+    if (frente.lengthSq() < 1e-6) frente.set(0, 0, -1); // de cima (planta): "frente" é o alto da tela
+    frente.normalize();
+    const lado = new THREE.Vector3(-frente.z, 0, frente.x);
+    const passo = new THREE.Vector3();
+    if (this.teclas.has("frente")) passo.add(frente);
+    if (this.teclas.has("tras")) passo.sub(frente);
+    if (this.teclas.has("direita")) passo.add(lado);
+    if (this.teclas.has("esquerda")) passo.sub(lado);
+    if (passo.lengthSq() === 0) return;
+    // Velocidade proporcional à distância: perto anda devagar, de longe atravessa o canteiro.
+    passo.normalize().multiplyScalar(THREE.MathUtils.clamp(dist * 0.9, 1.2, 60) * dt);
+    this.camera.position.add(passo);
+    this.controles.target.add(passo);
+  }
+
   private aoSoltar = (e: PointerEvent) => {
     const xy = (this as unknown as { _xy?: [number, number] })._xy;
     if (!xy || Math.hypot(e.clientX - xy[0], e.clientY - xy[1]) > 5) return;
@@ -817,12 +888,13 @@ export class Motor {
     }
     if (this.apontadoIfc != null) { this.apontadoIfc = null; this.realce.visible = false; this.opcoes.onApontarProjeto?.(null); }
     const est = id ? this.estacoes.get(id) : null;
-    this.renderer.domElement.style.cursor = this.medindo ? "crosshair" : est ? "pointer" : "";
+    this.renderer.domElement.style.cursor = this.medindo ? "crosshair" : est && this.ultimoModo !== "item" ? "pointer" : "";
     if (!est || this.medindo) { this.aoSair(); return; }
     if (this.apontado !== id) {
       this.apontado = id;
-      this.realce.box.copy(caixa(est.grupo));
-      this.realce.visible = true;
+      // Só o que está à vista entra na moldura; com um serviço sozinho na tela ela não ajuda.
+      this.realce.box.copy(caixaVisivel(est.grupo));
+      this.realce.visible = this.ultimoModo !== "item" && !this.realce.box.isEmpty();
     }
     this.opcoes.onApontar?.({ itemId: est.itemId, x, y });
   };
@@ -863,6 +935,7 @@ export class Motor {
       if (f >= 1) { this.tarefas.delete(t); t.fim?.(); }
     }
     this.medirDesempenho(agora);
+    this.andar(dt);
     this.controles.update();
     if (this.compositor && this.nivel < 2) this.compositor.render(); else this.renderer.render(this.cena, this.camera);
     this.rotulos.render(this.cena, this.camera);
@@ -1152,18 +1225,47 @@ export class Motor {
         grupo.add(l.grupo);
       });
     };
+    if (modo === "item") {
+      // Um serviço sozinho: materiais, equipamentos e equipe lado a lado, com folga, sem um ficar na frente do outro.
+      const LARGURA = 22;
+      const linhas: (typeof lista)[] = [[]];
+      let ocupado = 0;
+      const medida = new Map(lista.map((l) => [l, caixaVisivel(l.grupo)] as const));
+      const vaoDe = (l: (typeof lista)[number]) => (l.peca.papel === "mao_de_obra" ? 1 : 0.6);
+      // Ordem de leitura: primeiro os materiais, depois os equipamentos e por fim a equipe.
+      const peso = { kit: 0, material: 1, equipamento: 2, mao_de_obra: 3 } as const;
+      const ordenada = [...lista].sort((x, y) => peso[x.peca.papel] - peso[y.peca.papel]);
+      for (const l of ordenada) {
+        const t = medida.get(l)!.getSize(new THREE.Vector3());
+        const atual = linhas[linhas.length - 1];
+        if (atual.length && ocupado + vaoDe(l) + t.x > LARGURA) { linhas.push([l]); ocupado = t.x; continue; }
+        ocupado += (atual.length ? vaoDe(l) : 0) + t.x;
+        atual.push(l);
+      }
+      let z0 = 0;
+      for (const linha of linhas) {
+        const tams = linha.map((l) => medida.get(l)!.getSize(new THREE.Vector3()));
+        const total = tams.reduce((t, v) => t + v.x, 0) + linha.slice(1).reduce((t, l) => t + vaoDe(l), 0);
+        const fundo = Math.max(0.6, ...tams.map((t) => t.z));
+        let px = -total / 2;
+        linha.forEach((l, i) => {
+          const bb = medida.get(l)!;
+          if (i) px += vaoDe(l);
+          l.grupo.position.x = px - bb.min.x;
+          // Todos alinhados pela frente da fileira.
+          l.grupo.position.z = z0 + fundo - bb.max.z;
+          px += tams[i].x;
+          grupo.add(l.grupo);
+        });
+        z0 += fundo + 1.4;
+      }
+    } else {
     fila(atras, 0, 0.5);
     if (frente.length) {
       const prof = atras.length ? caixa(grupo).max.z : 0;
       // Equipe com mais folga: cada figura leva o próprio rótulo.
-      // No item, a equipe se espalha pela largura do serviço para os rótulos não se sobreporem.
-      let vao = 0.6;
-      if (modo === "item") {
-        const larguraAtras = atras.length ? caixa(grupo).getSize(new THREE.Vector3()).x : 0;
-        const ocupado = frente.reduce((t, l) => t + caixa(l.grupo).getSize(new THREE.Vector3()).x, 0);
-        vao = frente.length > 1 ? Math.min(4, Math.max(1.3, (larguraAtras * 0.8 - ocupado) / (frente.length - 1))) : 1.3;
-      }
-      fila(frente, prof + 0.9, vao);
+      fila(frente, prof + 0.9, 0.6);
+    }
     }
     for (const l of lista) {
       if (modo === "item") this.rotular(l.grupo, l.peca);
@@ -1481,7 +1583,9 @@ export class Motor {
   // Câmera
   // -------------------------------------------------------------------------
   private enquadrar(o: THREE.Object3D | THREE.Box3, imediato: boolean) {
-    const bb = o instanceof THREE.Box3 ? o : caixa(o);
+    // Um serviço sozinho: de frente e um pouco de cima, ocupando a tela.
+    const sozinho = this.ultimoModo === "item" && this.vistaAtual === "perspectiva" && !(o instanceof THREE.Box3);
+    const bb = o instanceof THREE.Box3 ? o : sozinho ? caixaVisivel(o) : caixa(o);
     if (bb.isEmpty()) return;
     const centro = bb.getCenter(new THREE.Vector3());
     const tam = bb.getSize(new THREE.Vector3());
@@ -1490,9 +1594,10 @@ export class Motor {
     const vfov = THREE.MathUtils.degToRad(this.camera.fov / 2);
     const hfov = Math.atan(Math.tan(vfov) * this.camera.aspect);
     const geral = o === this.raiz && this.estacoes.size > 1;
-    const dist = (raio / Math.sin(Math.min(vfov, hfov))) * (this.vistaAtual === "planta" || this.vistaAtual === "superior" ? 0.95 : geral ? 0.76 : o instanceof THREE.Box3 ? 1.3 : 1.05);
+    // Sozinho, a fileira inteira precisa caber na largura da tela, com folga para as etiquetas.
+    const dist = sozinho ? Math.max((tam.x / 2) / Math.tan(hfov), (tam.y / 2) / Math.tan(vfov), 2.2) * 1.15 + tam.z / 2 : (raio / Math.sin(Math.min(vfov, hfov))) * (this.vistaAtual === "planta" || this.vistaAtual === "superior" ? 0.95 : geral ? 0.76 : o instanceof THREE.Box3 ? 1.3 : 1.05);
     // Visão geral do canteiro mais de cima, como a planta de um depósito.
-    const dir = (this.vistaAtual !== "perspectiva" ? new THREE.Vector3(...DIRECAO[this.vistaAtual]) : geral ? new THREE.Vector3(0.25, 0.95, 1) : new THREE.Vector3(0.55, 0.5, 1)).normalize();
+    const dir = (this.vistaAtual !== "perspectiva" ? new THREE.Vector3(...DIRECAO[this.vistaAtual]) : geral ? new THREE.Vector3(0.25, 0.95, 1) : sozinho ? new THREE.Vector3(0.18, 0.42, 1) : new THREE.Vector3(0.55, 0.5, 1)).normalize();
     const destinoCam = centro.clone().add(dir.multiplyScalar(dist));
     centro.y = Math.max(centro.y * 0.8, 0.1);
     if (imediato || reduzirMovimento()) {
@@ -1776,12 +1881,32 @@ export class Motor {
     const cena = clonarComEsqueleto(gltf.scene);
     cena.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.frustumCulled = false; });
     prepararSombras(cena);
+    // Corpo da figura animada (sem ferramenta nem anel), anotado antes de trocar os materiais.
+    const corpoAnimado: THREE.Object3D[] = [];
+    cena.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && !Array.isArray(m.material) && m.material.name.startsWith("Manequim")) corpoAnimado.push(o); });
     vestirGesto(cena);
+    const corpoParado: THREE.Object3D[] = [];
+    parada.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.visible && !/_anel_|_fer[DE]_/.test(o.name)) corpoParado.push(o); });
+    const base = (os: THREE.Object3D[]) => {
+      const bb = new THREE.Box3();
+      for (const o of os) bb.union(caixa(o));
+      return bb.isEmpty() ? null : new THREE.Vector3((bb.min.x + bb.max.x) / 2, bb.min.y, (bb.min.z + bb.max.z) / 2);
+    };
+    const pesParado = base(corpoParado);
     parada.traverse((o) => { if ((o as THREE.Mesh).isMesh && !/_anel_/.test(o.name)) o.visible = false; });
     g.add(cena);
     const mixer = new THREE.AnimationMixer(cena);
+    for (const clip of gltf.animations) fecharMaos(clip);
     for (const clip of gltf.animations) { const a = mixer.clipAction(clip); a.setLoop(THREE.LoopPingPong, Infinity); a.play(); }
     mixer.timeScale = 0.8;
+    // A figura animada fica exatamente sobre a parada (e sobre o anel de horas), e não deslocada para cima de outra peça.
+    mixer.update(0);
+    const pesAnimado = base(corpoAnimado);
+    if (pesParado && pesAnimado) {
+      g.updateMatrixWorld(true);
+      const delta = g.worldToLocal(pesParado.clone()).sub(g.worldToLocal(pesAnimado.clone()));
+      if (delta.length() < 20) cena.position.add(delta);
+    }
     this.gestos.push({ mixer, cena });
   }
 
@@ -1871,6 +1996,11 @@ export class Motor {
     this.observador.disconnect();
     this.renderer.domElement.removeEventListener("pointerdown", this.aoApertar);
     this.renderer.domElement.removeEventListener("pointerup", this.aoSoltar);
+    this.container.removeEventListener("pointerenter", this.aoEntrar);
+    this.container.removeEventListener("pointerleave", this.aoDeixar);
+    window.removeEventListener("keydown", this.aoTeclar);
+    window.removeEventListener("keyup", this.aoSoltarTecla);
+    window.removeEventListener("blur", this.aoDeixar);
     this.limpar();
     this.controles.dispose();
     this.compositor?.dispose();

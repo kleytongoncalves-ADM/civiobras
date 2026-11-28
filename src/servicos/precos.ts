@@ -6,12 +6,12 @@ import { exigir } from "./permissoes";
 const ctx = (a: Ator): Contexto => ({ usuarioId: a.id, orgaoId: a.orgaoId });
 const uuid = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
 
-export type Fonte = "sinapi" | "sicro" | "propria" | "cotacao" | "demonstracao";
+export type Fonte = "sinapi" | "sicro" | "sco" | "propria" | "cotacao" | "demonstracao";
 export type Regime = "desonerado" | "nao_desonerado";
 export type TipoInsumo = "material" | "mao_de_obra" | "equipamento" | "servico" | "taxa";
 
 export const ROTULO_FONTE: Record<Fonte, string> = {
-  sinapi: "SINAPI", sicro: "SICRO", propria: "Própria", cotacao: "Cotação", demonstracao: "Demonstração",
+  sinapi: "SINAPI", sicro: "SICRO", sco: "SCO-Rio", propria: "Própria", cotacao: "Cotação", demonstracao: "Demonstração",
 };
 export const ROTULO_REGIME: Record<Regime, string> = { desonerado: "Desonerado", nao_desonerado: "Não desonerado" };
 export const ROTULO_TIPO_INSUMO: Record<TipoInsumo, string> = {
@@ -71,7 +71,7 @@ export type InsumoComPreco = {
 
 const termos = (busca: string) => busca.trim().split(/\s+/).filter(Boolean).slice(0, 6);
 
-function filtroBusca(busca: string | undefined, coluna: string, params: unknown[]) {
+export function filtroBusca(busca: string | undefined, coluna: string, params: unknown[]) {
   const t = termos(busca ?? "");
   if (!t.length) return "true";
   return t.map((x) => {

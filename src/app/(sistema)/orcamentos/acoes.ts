@@ -10,6 +10,7 @@ import {
   adicionarComposicao, adicionarCotacao, adicionarEtapa, adicionarInsumo, adicionarItemCotado, aprovarOrcamento,
   cancelarOrcamento, criarOrcamento, editarItem, novaVersao, removerCotacao, removerEtapa, removerItem, renomearEtapa, salvarMedidas,
   salvarCronograma, salvarDadosGerais, trocarBase, type CriterioCotacao,
+  configurarMontagem, etapaPeloNome, moverEtapa, moverItem, alterarQuantidade,
 } from "@/servicos/orcamentos";
 import { SemPermissao } from "@/servicos/permissoes";
 import type { TipoInsumo } from "@/servicos/precos";
@@ -48,7 +49,7 @@ export async function acaoCriarOrcamento(_: Estado, f: FormData): Promise<Estado
     return falha(e);
   }
   revalidatePath("/orcamentos");
-  redirect(`/orcamentos/${id}`);
+  redirect(`/orcamentos/${id}/montar?escolher=1`);
 }
 
 export async function acaoEtapa(id: string, etapaId: string, _: Estado, f: FormData): Promise<Estado> {
@@ -194,4 +195,74 @@ const metros = (v: string) => { if (!v) return null; const n = Number(v.replace(
 export async function acaoMedidas3d(id: string, itemId: string, _: Estado, f: FormData): Promise<Estado> {
   const a = await ator();
   return executar(id, () => salvarMedidas(a, id, itemId, { local: t(f, "local"), altura: metros(t(f, "altura")), comprimento: metros(t(f, "comprimento")), etapaInteira: f.get("etapaInteira") === "on" }));
+}
+
+/** Passo 2 do assistente: como montar e quais bases usar. */
+export async function acaoMontagem(id: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  const modo = t(f, "modo") as "assunto" | "livre";
+  const r = await executar(id, () => configurarMontagem(a, id, { modo, tabelasExtras: f.getAll("base").map(String) }));
+  if (r.erro) return r;
+  redirect(`/orcamentos/${id}/montar`);
+}
+
+/**
+ * Inclusão pelo assistente. A etapa pode ser uma existente ou uma nova pelo nome
+ * (por padrão, o nome do assunto).
+ */
+export async function acaoIncluirDoAssistente(id: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  return executar(id, async () => {
+    const escolha = t(f, "etapaId");
+    const etapaId = escolha === "nova" ? await etapaPeloNome(a, id, t(f, "novaEtapa")) : escolha;
+    const base = {
+      etapaId, quantidade: t(f, "quantidade"), memoria: t(f, "memoria"), tipoBdi: (t(f, "tipoBdi") || "obra") as "obra" | "fornecimento",
+      tabelaId: t(f, "tabelaId") || null, assuntoId: t(f, "assuntoId") || null,
+    };
+    if (t(f, "tipo") === "insumo") await adicionarInsumo(a, id, t(f, "refId"), base);
+    else await adicionarComposicao(a, id, t(f, "refId"), base);
+  }, "Incluído no orçamento.");
+}
+
+/** Inclui de uma vez os serviços pré-selecionados pelo tamanho (pacote do assunto). */
+export async function acaoIncluirPacote(id: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  const total = Number(t(f, "linhas")) || 0;
+  let incluidos = 0;
+  const r = await executar(id, async () => {
+    const escolha = t(f, "etapaId");
+    const etapaId = escolha === "nova" ? await etapaPeloNome(a, id, t(f, "novaEtapa")) : escolha;
+    for (let i = 0; i < total; i++) {
+      if (!f.get(`usar_${i}`)) continue;
+      const [refId, tabelaId] = t(f, `ref_${i}`).split("|");
+      if (!refId) continue;
+      await adicionarComposicao(a, id, refId, {
+        etapaId, quantidade: t(f, `qtd_${i}`), memoria: t(f, `mem_${i}`), tabelaId: tabelaId || null, assuntoId: t(f, "assuntoId") || null,
+      });
+      incluidos++;
+    }
+    if (!incluidos) throw new ErroDeRegra("Marque ao menos um serviço com composição escolhida.");
+  });
+  if (r.erro) return r;
+  return { ok: incluidos === 1 ? "1 serviço incluído." : `${incluidos} serviços incluídos.` };
+}
+
+export async function acaoMoverEtapa(id: string, etapaId: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  return executar(id, () => moverEtapa(a, id, etapaId, t(f, "sentido") === "subir" ? "subir" : "descer"));
+}
+
+export async function acaoMoverItem(id: string, itemId: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  const sentido = t(f, "sentido");
+  return executar(id, () => moverItem(a, id, itemId, {
+    etapaId: t(f, "etapaId") || undefined, sentido: sentido === "subir" || sentido === "descer" ? sentido : undefined,
+  }));
+}
+
+/** Revisão: quantidade alterada na própria linha; o botão de lixeira do mesmo formulário remove o item. */
+export async function acaoLinhaItem(id: string, itemId: string, _: Estado, f: FormData): Promise<Estado> {
+  const a = await ator();
+  if (t(f, "acao") === "remover") return executar(id, () => removerItem(a, id, itemId));
+  return executar(id, () => alterarQuantidade(a, id, itemId, t(f, "quantidade")));
 }

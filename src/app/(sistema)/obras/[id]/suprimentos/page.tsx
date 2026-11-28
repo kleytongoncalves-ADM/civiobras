@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRightLeft, FileSpreadsheet, FileText, PackagePlus, Plus } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
-import { dataCurta, moeda, numero, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataCurta, moeda, numero, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { pode } from "@/servicos/permissoes";
 import { MOVIMENTOS_MANUAIS, painelSuprimentos, ROTULO_MOVIMENTO, saidaDoEstoque } from "@/servicos/suprimentos";
 import { acaoImportarMateriais, acaoMinimo, acaoMovimento, acaoNovaRequisicao } from "../../../suprimentos/acoes";
@@ -137,19 +137,19 @@ export default async function SuprimentosDaObra({ params }: { params: Promise<{ 
               <div className="campo c5"><label htmlFor="mv-m">Material</label>
                 <select id="mv-m" name="materialId" className="entrada-texto" required defaultValue="">
                   <option value="" disabled>Escolha</option>
-                  {p.estoque.map((l) => <option key={l.materialId} value={l.materialId}>{l.descricao.slice(0, 60)} ({quantidade(l.saldo)} {unidadeMedida(l.unidade)})</option>)}
+                  {p.estoque.map((l) => <option key={l.materialId} value={l.materialId}>{resumir(l.descricao, 60)} ({quantidade(l.saldo)} {unidadeMedida(l.unidade)})</option>)}
                 </select></div>
               <div className="campo c2"><label htmlFor="mv-q">Quantidade</label><input id="mv-q" name="quantidade" inputMode="decimal" className="entrada-texto num" required /></div>
               <div className="campo c2"><label htmlFor="mv-d">Data</label><input id="mv-d" name="data" type="date" max={hoje()} defaultValue={hoje()} className="entrada-texto" required /></div>
               <div className="campo c6"><label htmlFor="mv-i">Item de serviço (saída)</label>
                 <select id="mv-i" name="itemServicoId" className="entrada-texto" defaultValue="">
                   <option value="">—</option>
-                  {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 70)}</option>)}
+                  {p.itens.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 70)}</option>)}
                 </select></div>
               <div className="campo c4"><label htmlFor="mv-o">Obra de destino (transferência)</label>
                 <select id="mv-o" name="obraDestinoId" className="entrada-texto" defaultValue="">
                   <option value="">—</option>
-                  {p.destinos.map((o) => <option key={o.id} value={o.id}>{o.codigo} · {o.nome.slice(0, 40)}</option>)}
+                  {p.destinos.map((o) => <option key={o.id} value={o.id}>{o.codigo} · {resumir(o.nome, 40)}</option>)}
                 </select></div>
               <div className="campo c2"><label htmlFor="mv-c">Custo unitário (ajuste +)</label><input id="mv-c" name="custoUnitario" inputMode="decimal" className="entrada-texto num" placeholder="Custo médio" /></div>
               <div className="campo c12"><label htmlFor="mv-j">Justificativa</label><input id="mv-j" name="observacao" className="entrada-texto" /></div>
@@ -166,7 +166,7 @@ export default async function SuprimentosDaObra({ params }: { params: Promise<{ 
               <thead><tr><th>Item</th><th>Material</th><th className="dir">Aplicado</th><th className="dir">Teórico</th><th className="dir">Perda</th><th className="dir">Prevista</th></tr></thead>
               <tbody>{p.perdas.map((l, i) => (
                 <tr key={i} className={l.acima ? "linha-vencida" : ""}>
-                  <td><b className="num">{l.itemNumero}</b> {l.itemDescricao.slice(0, 60)}</td>
+                  <td><b className="num">{l.itemNumero}</b> {resumir(l.itemDescricao, 60)}</td>
                   <td>{l.material}</td>
                   <td className="dir num">{quantidade(l.real)} {unidadeMedida(l.unidade)}</td>
                   <td className="dir num">{l.teorico ? `${quantidade(l.teorico)} ${unidadeMedida(l.unidade)}` : "sem medição"}</td>

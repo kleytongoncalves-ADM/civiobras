@@ -7,7 +7,7 @@ import { ComparacaoAutomatica, NotasCustoBeneficio, textoPesos } from "@/compone
 import { Classificacao, fraseEconomia, ItensApurados } from "@/componentes/cotacao/Resultado";
 import { BarrasHorizontais, COR } from "@/componentes/relatorio/Graficos";
 import { CabecalhoRelatorio, Indicadores, RodapeRelatorio, Secao } from "@/componentes/relatorio/Estrutura";
-import { dataHora, dataLonga, mesAno, moeda, percentual, quantidade, valor } from "@/lib/formato";
+import { dataHora, dataLonga, mesAno, moeda, percentual, quantidade, valor, resumir } from "@/lib/formato";
 import { formatarCnpj } from "@/servicos/contratos";
 import { FATORES, LIMITES_PADRAO, mediaMediana, totaisMediaMediana, ROTULO_CRITERIO_APURACAO, ROTULO_FATOR } from "@/servicos/cotacao-calculo";
 import { protocolo, ROTULO_CONVITE, ROTULO_SITUACAO_COTACAO } from "@/servicos/cotacoes";
@@ -200,7 +200,7 @@ export default async function RelatorioDaCotacao({ params }: { params: Promise<{
             <div className="rel-rolagem"><ItensApurados a={r} rel /></div>
             {economias.length > 1 && (
               <BarrasHorizontais titulo="Maiores economias por item em relação à referência (R$)" unidade="" casas={2} cor={COR.material}
-                itens={economias.filter((i) => Number(i.economia) > 0).map((i) => ({ rotulo: i.descricao.length > 46 ? `${i.descricao.slice(0, 46)}…` : i.descricao, valor: Number(i.economia) }))} />
+                itens={economias.filter((i) => Number(i.economia) > 0).map((i) => ({ rotulo: i.descricao.length > 46 ? resumir(i.descricao, 46) : i.descricao, valor: Number(i.economia) }))} />
             )}
           </Secao>
         )}

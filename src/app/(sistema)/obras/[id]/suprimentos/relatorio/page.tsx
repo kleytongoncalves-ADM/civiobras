@@ -6,7 +6,7 @@ import { BotaoImprimir } from "@/componentes/BotaoImprimir";
 import { CabecalhoRelatorio, Indicadores, RodapeRelatorio, Secao } from "@/componentes/relatorio/Estrutura";
 import { BarrasHorizontais, COR } from "@/componentes/relatorio/Graficos";
 import { ErroDeRegra } from "@/lib/db";
-import { dataCurta, dataHora, moeda, numero, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataCurta, dataHora, moeda, numero, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { comoAtor, exigirUsuario } from "@/lib/sessao";
 import { SemPermissao } from "@/servicos/permissoes";
 import { painelSuprimentos, ROTULO_PEDIDO, ROTULO_REQUISICAO } from "@/servicos/suprimentos";
@@ -75,7 +75,7 @@ export default async function RelatorioSuprimentos({ params }: { params: Promise
               <tfoot><tr><td colSpan={8}>Valor total em estoque</td><td className="dir num">{moeda(p.valorEstoque)}</td></tr></tfoot>
             </table>
           )}
-          {maiores.length > 1 && <BarrasHorizontais titulo="Maiores valores em estoque (R$)" unidade="" cor={COR.material} itens={maiores.map((l) => ({ rotulo: l.descricao.slice(0, 40), valor: Math.round(l.valor) }))} />}
+          {maiores.length > 1 && <BarrasHorizontais titulo="Maiores valores em estoque (R$)" unidade="" cor={COR.material} itens={maiores.map((l) => ({ rotulo: resumir(l.descricao, 40), valor: Math.round(l.valor) }))} />}
         </Secao>
 
         {p.perdas.length > 0 && (
@@ -83,7 +83,7 @@ export default async function RelatorioSuprimentos({ params }: { params: Promise
             <table className="rel-tabela">
               <thead><tr><th>Serviço</th><th>Material</th><th className="dir">Teórico</th><th className="dir">Real</th><th className="dir">Perda real</th><th className="dir">Prevista</th></tr></thead>
               <tbody>{p.perdas.map((x, k) => (
-                <tr key={k}><td><span className="num">{x.itemNumero}</span> {x.itemDescricao.slice(0, 50)}</td><td>{x.material}</td>
+                <tr key={k}><td><span className="num">{x.itemNumero}</span> {resumir(x.itemDescricao, 50)}</td><td>{x.material}</td>
                   <td className="dir num">{quantidade(x.teorico)} {unidadeMedida(x.unidade)}</td><td className="dir num">{quantidade(x.real)} {unidadeMedida(x.unidade)}</td>
                   <td className={`dir num${x.acima ? " forte" : ""}`}>{x.perda == null ? "—" : x.perda < 0 ? "abaixo do teórico" : `${numero(x.perda, 1)}%`}</td><td className="dir num">{numero(x.prevista, 1)}%</td></tr>
               ))}</tbody>

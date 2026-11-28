@@ -11,13 +11,13 @@ import type { FichaObra, ObraNoMapa } from "@/servicos/mapa";
 import { ROTULO_SITUACAO, type Situacao } from "@/servicos/rotulos";
 import { acaoDefinirLocal } from "./acoes";
 
-/** Imagem de satélite (Esri World Imagery) com ruas e nomes por cima; mapa de ruas do OpenStreetMap como alternativa. */
+/** Imagem de satélite (Esri World Imagery) com ruas e nomes por cima; mapa de ruas da Esri como alternativa. */
 const SATELITE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const RUAS_SOBRE = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}";
 const NOMES_SOBRE = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-const RUAS = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const RUAS = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
 const ATRIB_SATELITE = "Imagens &copy; Esri, Maxar, Earthstar Geographics";
-const ATRIB_RUAS = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
+const ATRIB_RUAS = "Mapa &copy; Esri, HERE, Garmin, OpenStreetMap";
 const CENTRO_RJ: [number, number] = [-22.6, -43.0];
 
 const COR_SITUACAO: Record<Situacao, string> = {

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Ban, Check, Plus, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { BotaoEnviar, FormAcao } from "@/componentes/FormAcao";
 import { ErroDeRegra } from "@/lib/db";
-import { dataCurta, dataHora, moeda, quantidade, unidadeMedida } from "@/lib/formato";
+import { dataCurta, dataHora, moeda, quantidade, unidadeMedida, resumir } from "@/lib/formato";
 import { comoAtor, exigirUsuario } from "@/lib/sessao";
 import { SemPermissao } from "@/servicos/permissoes";
 import { obterRequisicao } from "@/servicos/suprimentos";
@@ -75,13 +75,13 @@ export default async function PaginaRequisicao({ params }: { params: Promise<{ i
               <div className="campo c5"><label htmlFor="ri-m">Material</label>
                 <select id="ri-m" name="materialId" className="entrada-texto" required defaultValue="">
                   <option value="" disabled>Escolha</option>
-                  {r.materiais.map((m) => <option key={m.id} value={m.id}>{m.descricao.slice(0, 70)} ({unidadeMedida(m.unidade)})</option>)}
+                  {r.materiais.map((m) => <option key={m.id} value={m.id}>{resumir(m.descricao, 70)} ({unidadeMedida(m.unidade)})</option>)}
                 </select></div>
               <div className="campo c2"><label htmlFor="ri-q">Quantidade</label><input id="ri-q" name="quantidade" inputMode="decimal" className="entrada-texto num" required /></div>
               <div className="campo c5"><label htmlFor="ri-i">Item de serviço</label>
                 <select id="ri-i" name="itemServicoId" className="entrada-texto" defaultValue="">
                   <option value="">—</option>
-                  {r.itensObra.map((i) => <option key={i.id} value={i.id}>{i.numero} {i.descricao.slice(0, 60)}</option>)}
+                  {r.itensObra.map((i) => <option key={i.id} value={i.id}>{i.numero} {resumir(i.descricao, 60)}</option>)}
                 </select></div>
               <div className="campo c9"><label htmlFor="ri-j">Justificativa (acima do previsto)</label><input id="ri-j" name="justificativa" className="entrada-texto" /></div>
               <div className="c3 rodape-form" style={{ alignSelf: "end" }}><BotaoEnviar className="botao botao-neutro" enviando="Incluindo…"><Plus /> Incluir</BotaoEnviar></div>
@@ -125,7 +125,7 @@ export default async function PaginaRequisicao({ params }: { params: Promise<{ i
                 <tbody>
                   {r.itens.map((i) => (
                     <tr key={i.id}>
-                      <td>{i.descricao.slice(0, 60)}<div className="fraco">{unidadeMedida(i.unidade)}</div></td>
+                      <td>{resumir(i.descricao, 60)}<div className="fraco">{unidadeMedida(i.unidade)}</div></td>
                       <td className="dir num">{quantidade(i.quantidade)}</td>
                       <td className="dir num fraco">{i.referencia != null ? moeda(i.referencia) : "—"}</td>
                       {r.cotacoes.map((c) => {
@@ -154,7 +154,7 @@ export default async function PaginaRequisicao({ params }: { params: Promise<{ i
                       <b>{c.fornecedor}</b>
                       <div className="opcoes-epi" style={{ marginTop: 8 }}>
                         {cotados.map((i) => (
-                          <label key={i.id} className="opcao-check"><input type="checkbox" name="item" value={i.id} defaultChecked={r.menor[i.id] === c.precos[i.id]} /> {i.descricao.slice(0, 40)}</label>
+                          <label key={i.id} className="opcao-check"><input type="checkbox" name="item" value={i.id} defaultChecked={r.menor[i.id] === c.precos[i.id]} /> {resumir(i.descricao, 40)}</label>
                         ))}
                       </div>
                       <div className="form-linha" style={{ marginTop: 8 }}>
@@ -184,7 +184,7 @@ export default async function PaginaRequisicao({ params }: { params: Promise<{ i
                   <div className="c12 lista-precos">
                     {r.itens.map((i) => (
                       <div key={i.id} className="campo">
-                        <label htmlFor={`pc-${i.id}`}>{i.descricao.slice(0, 50)} <span className="fraco">({quantidade(i.quantidade)} {unidadeMedida(i.unidade)})</span></label>
+                        <label htmlFor={`pc-${i.id}`}>{resumir(i.descricao, 50)} <span className="fraco">({quantidade(i.quantidade)} {unidadeMedida(i.unidade)})</span></label>
                         <input id={`pc-${i.id}`} name={`preco_${i.id}`} inputMode="decimal" className="entrada-texto num" placeholder="Preço unitário" />
                       </div>
                     ))}

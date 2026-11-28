@@ -6,7 +6,7 @@ import { BotaoImprimir } from "@/componentes/BotaoImprimir";
 import { CabecalhoRelatorio, Indicadores, RodapeRelatorio, Secao } from "@/componentes/relatorio/Estrutura";
 import { BarraComposicao, BarrasHorizontais, COR } from "@/componentes/relatorio/Graficos";
 import { ErroDeRegra } from "@/lib/db";
-import { dataCurta, dataHora, moeda, numero, percentual } from "@/lib/formato";
+import { dataCurta, dataHora, moeda, numero, percentual, resumir } from "@/lib/formato";
 import { comoAtor, exigirUsuario } from "@/lib/sessao";
 import { ADICIONAL_EXTRA, limiteAviso, painelEquipes } from "@/servicos/equipes";
 import { SemPermissao } from "@/servicos/permissoes";
@@ -74,7 +74,7 @@ export default async function RelatorioEquipes({ params }: { params: Promise<{ i
             <table className="rel-tabela">
               <thead><tr><th>Item</th><th>Serviço</th><th className="dir">Medido (R$)</th><th className="dir">Materiais</th><th className="dir">Mão de obra</th><th className="dir">Equipamentos</th><th className="dir">Realizado</th><th className="dir">h/un. real</th><th className="dir">h/un. prevista</th><th className="dir">Índice</th></tr></thead>
               <tbody>{custos.map((l) => (
-                <tr key={l.itemId}><td className="num">{l.numero}</td><td><span className="rel-desc">{l.descricao.slice(0, 60)}</span></td>
+                <tr key={l.itemId}><td className="num">{l.numero}</td><td><span className="rel-desc">{resumir(l.descricao, 60)}</span></td>
                   <td className="dir num">{moeda(l.medido)}</td><td className="dir num">{moeda(l.materiais)}</td><td className="dir num">{moeda(l.maoDeObra)}</td><td className="dir num">{moeda(l.equipamentos)}</td>
                   <td className="dir num forte">{moeda(l.realizado)}</td>
                   <td className="dir num">{l.horasPorUnidade != null ? numero(l.horasPorUnidade, 3) : "—"}</td><td className="dir num">{l.previstoPorUnidade != null ? numero(l.previstoPorUnidade, 3) : "—"}</td>

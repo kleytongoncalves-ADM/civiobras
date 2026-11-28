@@ -17,6 +17,7 @@
     "atualizar-sinapi": "tsx scripts/atualizar-sinapi.ts",
     "importar-sicro": "tsx scripts/importar-sicro.ts",
     "atualizar-sicro": "tsx scripts/atualizar-sicro.ts",
+    "atualizar-sco": "tsx scripts/atualizar-sco.ts",
     "mover-arquivos": "tsx scripts/mover-arquivos.ts",
     "typecheck": "tsc --noEmit",
     "catalogo-3d": "tsx scripts/gerar-catalogo-3d.ts"
